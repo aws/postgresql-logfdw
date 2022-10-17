@@ -44,7 +44,7 @@
 #include "utils/rel.h"
 #include "utils/sampling.h"
 
-#define RDS_POSTGRES_LOG_FILE_DIR	"/rdsdbdata/log/error"
+#define RDS_POSTGRES_LOG_FILE_DIR	"/home/kadamnn/workplace/pg_14/data/log"
 #define CSV_FILE_EXTENSION		".csv"
 #define CSV_GZ_FILE_EXTENSION		".csv.gz"
 
