@@ -3,6 +3,7 @@
 -- complain if script is sourced in psql, rather than via CREATE EXTENSION
 \echo Use "CREATE EXTENSION file_fdw" to load this file. \quit
 
+
 CREATE FUNCTION file_fdw_handler()
 RETURNS fdw_handler
 AS 'MODULE_PATHNAME'
@@ -18,13 +19,9 @@ CREATE FOREIGN DATA WRAPPER file_fdw
   VALIDATOR file_fdw_validator;
 
 
-CREATE FUNCTION list_postgres_log_files(
-	OUT file_name TEXT,
-	OUT file_size_bytes BIGINT)
-AS 'MODULE_PATHNAME'
-LANGUAGE C STRICT;
 
-CREATE FUNCTION create_foreign_table_for_log_file(table_name text, server_name text, log_file_name text)
+
+CREATE OR REPLACE FUNCTION create_foreign_table_for_log_file(table_name text, server_name text, log_file_name text)
 RETURNS void AS
 $BODY$
 BEGIN
@@ -53,7 +50,10 @@ BEGIN
 		  query				text,
 		  query_pos			integer,
 		  location			text,
-		  application_name		text
+		  application_name		text,
+		  backend_type			text,
+		  leader_pid			integer,
+		  query_id			bigint
 		) SERVER %I
 		OPTIONS (filename %L)',
 		$1, $2, '/home/kadamnn/workplace/pg_14/data/log/' || $3);
@@ -68,14 +68,31 @@ END
 $BODY$
 	LANGUAGE plpgsql;
 
+
+
+/*
+ * Redefine list_postgres_log_files() as an SRF so that queries like
+ *
+ *     SELECT list_postgres_log_files();
+ *
+ * do not fail with this error:
+ *
+ *     ERROR:  materialize mode required, but it is not allowed in this context
+ */
+--ALTER EXTENSION file_fdw DROP FUNCTION list_postgres_log_files();
+DROP FUNCTION IF EXISTS list_postgres_log_files();
+CREATE OR REPLACE FUNCTION list_postgres_log_files(
+	OUT file_name TEXT,
+	OUT file_size_bytes BIGINT)
+RETURNS setof record
+AS 'MODULE_PATHNAME'
+LANGUAGE C STRICT;
+REVOKE ALL ON FUNCTION list_postgres_log_files() FROM PUBLIC;
+--ALTER FUNCTION list_postgres_log_files() OWNER TO rds_superuser;
+
+
+
 REVOKE ALL ON FUNCTION file_fdw_handler() FROM PUBLIC;
 REVOKE ALL ON FUNCTION file_fdw_validator(text[], oid) FROM PUBLIC;
 REVOKE ALL ON FOREIGN DATA WRAPPER file_fdw FROM PUBLIC;
-REVOKE ALL ON FUNCTION list_postgres_log_files() FROM PUBLIC;
 REVOKE ALL ON FUNCTION create_foreign_table_for_log_file(table_name text, server_name text, log_file_name text) FROM PUBLIC;
-
---ALTER FUNCTION file_fdw_handler() OWNER TO rds_superuser;
---ALTER FUNCTION file_fdw_validator(text[], oid) OWNER TO rds_superuser;
---ALTER FOREIGN DATA WRAPPER file_fdw OWNER TO rds_superuser;
---ALTER FUNCTION list_postgres_log_files() OWNER TO rds_superuser;
---ALTER FUNCTION create_foreign_table_for_log_file(table_name text, server_name text, log_file_name text) OWNER TO rds_superuser;
