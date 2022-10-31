@@ -25,7 +25,7 @@ CREATE OR REPLACE FUNCTION create_foreign_table_for_log_file(table_name text, se
 RETURNS void AS
 $BODY$
 BEGIN
-	IF log_file_name LIKE '%.csv' or log_file_name LIKE '%.csv.gz'
+	IF $3 LIKE '%.csv' or $3 LIKE '%.csv.gz'
 	THEN
 		EXECUTE format('CREATE FOREIGN TABLE %I (
 		  log_time			timestamp(3) with time zone,
@@ -56,13 +56,13 @@ BEGIN
 		  query_id			bigint
 		) SERVER %I
 		OPTIONS (filename %L)',
-		table_name, server_name, '/home/kadamnn/workplace/pg_14/data/log/' || log_file_name);
+		$1, $2, '/home/kadamnn/workplace/pg_14/data/log/' || $3);
 	ELSE
 		EXECUTE format('CREATE FOREIGN TABLE %I (
 		  log_entry text
 		) SERVER %I
 		OPTIONS (filename %L)',
-		table_name, server_name, '/home/kadamnn/workplace/pg_14/data/log/' || log_file_name);
+		$1, $2, '/home/kadamnn/workplace/pg_14/data/log/' || $3);
 	END IF;
 END
 $BODY$
