@@ -1,5 +1,5 @@
-# file_fdw extension
+# log_fdw extension
 comment = 'foreign-data wrapper for flat file access'
 default_version = '1.0'
-module_pathname = '$libdir/file_fdw'
+module_pathname = '$libdir/log_fdw'
 relocatable = true

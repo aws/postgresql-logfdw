@@ -1,12 +1,12 @@
 /*-------------------------------------------------------------------------
  *
- * file_fdw.c
+ * log_fdw.c
  *		  foreign-data wrapper for server-side flat files (or programs).
  *
  * Copyright (c) 2010-2021, PostgreSQL Global Development Group
  *
  * IDENTIFICATION
- *		  contrib/file_fdw/file_fdw.c
+ *		  contrib/log_fdw/log_fdw.c
  *
  *-------------------------------------------------------------------------
  */
@@ -60,7 +60,7 @@ struct FileFdwOption
 };
 
 /*
- * Valid options for file_fdw.
+ * Valid options for log_fdw.
  * These options are based on the options for the COPY FROM command.
  * But note that force_not_null and force_null are handled as boolean options
  * attached to a column, not as table options.
@@ -86,7 +86,7 @@ static const struct FileFdwOption valid_options[] = {
 	{"force_null", AttributeRelationId},
 
 	/*
-	 * force_quote is not supported by file_fdw because it's for COPY TO.
+	 * force_quote is not supported by log_fdw because it's for COPY TO.
 	 */
 
 	/* Sentinel */
@@ -121,8 +121,8 @@ typedef struct FileFdwExecutionState
 /*
  * SQL functions
  */
-PG_FUNCTION_INFO_V1(file_fdw_handler);
-PG_FUNCTION_INFO_V1(file_fdw_validator);
+PG_FUNCTION_INFO_V1(log_fdw_handler);
+PG_FUNCTION_INFO_V1(log_fdw_validator);
 
 PG_FUNCTION_INFO_V1(list_postgres_log_files);
 
@@ -161,7 +161,7 @@ static void fileGetOptions(Oid foreigntableid,
 						   char **filename,
 						   bool *is_program,
 						   List **other_options);
-static List *get_file_fdw_attribute_options(Oid relid);
+static List *get_log_fdw_attribute_options(Oid relid);
 static bool check_selective_binary_conversion(RelOptInfo *baserel,
 											  Oid foreigntableid,
 											  List **columns);
@@ -278,7 +278,7 @@ list_postgres_log_files(PG_FUNCTION_ARGS)
  * to my callback routines.
  */
 Datum
-file_fdw_handler(PG_FUNCTION_ARGS)
+log_fdw_handler(PG_FUNCTION_ARGS)
 {
 	FdwRoutine *fdwroutine = makeNode(FdwRoutine);
 
@@ -298,12 +298,12 @@ file_fdw_handler(PG_FUNCTION_ARGS)
 
 /*
  * Validate the generic options given to a FOREIGN DATA WRAPPER, SERVER,
- * USER MAPPING or FOREIGN TABLE that uses file_fdw.
+ * USER MAPPING or FOREIGN TABLE that uses log_fdw.
  *
  * Raise an ERROR if the option or its value is considered invalid.
  */
 Datum
-file_fdw_validator(PG_FUNCTION_ARGS)
+log_fdw_validator(PG_FUNCTION_ARGS)
 {
 	List	   *options_list = untransformRelOptions(PG_GETARG_DATUM(0));
 	Oid			catalog = PG_GETARG_OID(1);
@@ -314,7 +314,7 @@ file_fdw_validator(PG_FUNCTION_ARGS)
 	ListCell   *cell;
 
 	/*
-	 * Check that only options supported by file_fdw, and allowed for the
+	 * Check that only options supported by log_fdw, and allowed for the
 	 * current object type, are given.
 	 */
 	foreach(cell, options_list)
@@ -361,10 +361,10 @@ file_fdw_validator(PG_FUNCTION_ARGS)
 
 			/*
 			 * Check permissions for changing which file or program is used by
-			 * the file_fdw.
+			 * the log_fdw.
 			 *
 			 * Only members of the role 'pg_read_server_files' are allowed to
-			 * set the 'filename' option of a file_fdw foreign table, while
+			 * set the 'filename' option of a log_fdw foreign table, while
 			 * only members of the role 'pg_execute_server_program' are
 			 * allowed to set the 'program' option.  This is because we don't
 			 * want regular users to be able to control which file gets read
@@ -382,20 +382,20 @@ file_fdw_validator(PG_FUNCTION_ARGS)
 				!is_member_of_role(GetUserId(), ROLE_PG_READ_SERVER_FILES))
 				ereport(ERROR,
 						(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-						 errmsg("only superuser or a member of the pg_read_server_files role may specify the filename option of a file_fdw foreign table")));
+						 errmsg("only superuser or a member of the pg_read_server_files role may specify the filename option of a log_fdw foreign table")));
 
 			if (strcmp(def->defname, "program") == 0 &&
 				!is_member_of_role(GetUserId(), ROLE_PG_EXECUTE_SERVER_PROGRAM))
 				ereport(ERROR,
 						(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-						 errmsg("only superuser or a member of the pg_execute_server_program role may specify the program option of a file_fdw foreign table")));
+						 errmsg("only superuser or a member of the pg_execute_server_program role may specify the program option of a log_fdw foreign table")));
 
 			filename = defGetString(def);
 		}
 
 		/*
 		 * force_not_null is a boolean option; after validation we can discard
-		 * it - it will be retrieved later in get_file_fdw_attribute_options()
+		 * it - it will be retrieved later in get_log_fdw_attribute_options()
 		 */
 		else if (strcmp(def->defname, "force_not_null") == 0)
 		{
@@ -429,13 +429,13 @@ file_fdw_validator(PG_FUNCTION_ARGS)
 	ProcessCopyOptions(NULL, NULL, true, other_options);
 
 	/*
-	 * Either filename or program option is required for file_fdw foreign
+	 * Either filename or program option is required for log_fdw foreign
 	 * tables.
 	 */
 	if (catalog == ForeignTableRelationId && filename == NULL)
 		ereport(ERROR,
 				(errcode(ERRCODE_FDW_DYNAMIC_PARAMETER_VALUE_NEEDED),
-				 errmsg("either filename or program is required for file_fdw foreign tables")));
+				 errmsg("either filename or program is required for log_fdw foreign tables")));
 
 	PG_RETURN_VOID();
 }
@@ -458,7 +458,7 @@ is_valid_option(const char *option, Oid context)
 }
 
 /*
- * Fetch the options for a file_fdw foreign table.
+ * Fetch the options for a log_fdw foreign table.
  *
  * We have to separate out filename/program from the other options because
  * those must not appear in the options list passed to the core COPY code.
@@ -476,7 +476,7 @@ fileGetOptions(Oid foreigntableid,
 
 	/*
 	 * Extract options from FDW objects.  We ignore user mappings because
-	 * file_fdw doesn't have any options that can be specified there.
+	 * log_fdw doesn't have any options that can be specified there.
 	 *
 	 * (XXX Actually, given the current contents of valid_options[], there's
 	 * no point in examining anything except the foreign table's own options.
@@ -490,7 +490,7 @@ fileGetOptions(Oid foreigntableid,
 	options = list_concat(options, wrapper->options);
 	options = list_concat(options, server->options);
 	options = list_concat(options, table->options);
-	options = list_concat(options, get_file_fdw_attribute_options(foreigntableid));
+	options = list_concat(options, get_log_fdw_attribute_options(foreigntableid));
 
 	/*
 	 * Separate out the filename or program option (we assume there is only
@@ -522,7 +522,7 @@ fileGetOptions(Oid foreigntableid,
 	 * in the options, but check again, just in case.
 	 */
 	if (*filename == NULL)
-		elog(ERROR, "either filename or program is required for file_fdw foreign tables");
+		elog(ERROR, "either filename or program is required for log_fdw foreign tables");
     /*
 	 * The validator should have also checked that the file is in
 	 * /rdsdbdata/log/error, but check again, just in case.
@@ -573,7 +573,7 @@ fileGetOptions(Oid foreigntableid,
  * columns, since that's what COPY expects.
  */
 static List *
-get_file_fdw_attribute_options(Oid relid)
+get_log_fdw_attribute_options(Oid relid)
 {
 	Relation	rel;
 	TupleDesc	tupleDesc;
@@ -1280,7 +1280,7 @@ file_acquire_sample_rows(Relation onerel, int elevel,
 	 * rows from the file with Copy routines.
 	 */
 	tupcontext = AllocSetContextCreate(CurrentMemoryContext,
-									   "file_fdw temporary context",
+									   "log_fdw temporary context",
 									   ALLOCSET_DEFAULT_SIZES);
 
 	/* Prepare for sampling rows */

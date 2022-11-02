@@ -1,22 +1,22 @@
-/* contrib/file_fdw/file_fdw--1.0.sql */
+/* contrib/log_fdw/log_fdw--1.0.sql */
 
 -- complain if script is sourced in psql, rather than via CREATE EXTENSION
-\echo Use "CREATE EXTENSION file_fdw" to load this file. \quit
+\echo Use "CREATE EXTENSION log_fdw" to load this file. \quit
 
 
-CREATE FUNCTION file_fdw_handler()
+CREATE FUNCTION log_fdw_handler()
 RETURNS fdw_handler
 AS 'MODULE_PATHNAME'
 LANGUAGE C STRICT;
 
-CREATE FUNCTION file_fdw_validator(text[], oid)
+CREATE FUNCTION log_fdw_validator(text[], oid)
 RETURNS void
 AS 'MODULE_PATHNAME'
 LANGUAGE C STRICT;
 
-CREATE FOREIGN DATA WRAPPER file_fdw
-  HANDLER file_fdw_handler
-  VALIDATOR file_fdw_validator;
+CREATE FOREIGN DATA WRAPPER log_fdw
+  HANDLER log_fdw_handler
+  VALIDATOR log_fdw_validator;
 
 
 
@@ -79,7 +79,7 @@ $BODY$
  *
  *     ERROR:  materialize mode required, but it is not allowed in this context
  */
---ALTER EXTENSION file_fdw DROP FUNCTION list_postgres_log_files();
+--ALTER EXTENSION log_fdw DROP FUNCTION list_postgres_log_files();
 DROP FUNCTION IF EXISTS list_postgres_log_files();
 CREATE OR REPLACE FUNCTION list_postgres_log_files(
 	OUT file_name TEXT,
@@ -92,7 +92,7 @@ REVOKE ALL ON FUNCTION list_postgres_log_files() FROM PUBLIC;
 
 
 
-REVOKE ALL ON FUNCTION file_fdw_handler() FROM PUBLIC;
-REVOKE ALL ON FUNCTION file_fdw_validator(text[], oid) FROM PUBLIC;
-REVOKE ALL ON FOREIGN DATA WRAPPER file_fdw FROM PUBLIC;
+REVOKE ALL ON FUNCTION log_fdw_handler() FROM PUBLIC;
+REVOKE ALL ON FUNCTION log_fdw_validator(text[], oid) FROM PUBLIC;
+REVOKE ALL ON FOREIGN DATA WRAPPER log_fdw FROM PUBLIC;
 REVOKE ALL ON FUNCTION create_foreign_table_for_log_file(table_name text, server_name text, log_file_name text) FROM PUBLIC;
