@@ -10,6 +10,7 @@
  *
  *-------------------------------------------------------------------------
  */
+ 
 #include "postgres.h"
 
 #include <sys/stat.h>
@@ -43,10 +44,14 @@
 #include "utils/memutils.h"
 #include "utils/rel.h"
 #include "utils/sampling.h"
+//#include "utils/guc.h"
 
-#define RDS_POSTGRES_LOG_FILE_DIR	"/home/kadamnn/workplace/pg_14/data/log"
+//#define RDS_POSTGRES_LOG_FILE_DIR	"/home/kadamnn/workplace/pg_14/data/log"
 #define CSV_FILE_EXTENSION		".csv"
 #define CSV_GZ_FILE_EXTENSION		".csv.gz"
+extern char *Log_directory;
+extern char *DataDir;
+
 
 PG_MODULE_MAGIC;
 
@@ -190,6 +195,8 @@ list_postgres_log_files(PG_FUNCTION_ARGS)
 	char *			values[2];
 	HeapTuple		tuple;
 	char *			file_path;
+	char *			log_file_dir;
+	
 
 	/* check to see if caller supports us returning a tuplestore */
 	if (!rsinfo || !(rsinfo->allowedModes & SFRM_Materialize))
@@ -225,14 +232,29 @@ list_postgres_log_files(PG_FUNCTION_ARGS)
 	tupstore = tuplestore_begin_heap(true, false, work_mem);
 
 	file_path = (char *) palloc(PATH_MAX);
-	dir = AllocateDir(RDS_POSTGRES_LOG_FILE_DIR);
-	while (NULL != (de = ReadDir(dir, RDS_POSTGRES_LOG_FILE_DIR)))
+	log_file_dir = (char *) palloc(PATH_MAX);
+
+
+
+	if (strlen(Log_directory)>0 && Log_directory[0]=='/')
+	{
+		strcpy(log_file_dir,Log_directory);
+	} 
+	else 
+	{
+		snprintf(log_file_dir, PATH_MAX,"%s/%s",DataDir, Log_directory);
+	}
+
+	
+
+	dir = AllocateDir(log_file_dir);
+	while (NULL != (de = ReadDir(dir, log_file_dir)))
 	{
 		struct stat st;
 		int stat_err;
 
 		/* get the full file path */
-		snprintf(file_path, PATH_MAX, "%s/%s", RDS_POSTGRES_LOG_FILE_DIR, de->d_name);
+		snprintf(file_path, PATH_MAX, "%s/%s", log_file_dir, de->d_name);
 
 		/* get the size in bytes of the file (note that we skip the file if something goes wrong with stat(...)) */
 		stat_err = stat(file_path, &st);
@@ -248,6 +270,8 @@ list_postgres_log_files(PG_FUNCTION_ARGS)
 	}
 	FreeDir(dir);
 	pfree(file_path);
+	pfree(log_file_dir);
+	
 
 	/*
 	 * no longer need the tuple descriptor reference created by
@@ -473,6 +497,7 @@ fileGetOptions(Oid foreigntableid,
 	List	   *options;
 	ListCell   *lc;
 	char       *path;
+	char *		log_file_dir;
 
 	/*
 	 * Extract options from FDW objects.  We ignore user mappings because
@@ -528,10 +553,24 @@ fileGetOptions(Oid foreigntableid,
 	 * /rdsdbdata/log/error, but check again, just in case.
 	 */
 	path = pstrdup(*filename);
+	//log_file_dir = pstrdup(*filename);
+	log_file_dir = (char *) palloc(PATH_MAX);
+
+
+	if (strlen(Log_directory)>0 && Log_directory[0]=='/')
+	{
+		strcpy(log_file_dir,Log_directory);
+	} 
+	else 
+	{
+		snprintf(log_file_dir, PATH_MAX,"%s/%s",DataDir, Log_directory);
+	}
+
+
 	canonicalize_path(path);
 	if (path_contains_parent_reference(path) ||
-		!path_is_prefix_of_path(RDS_POSTGRES_LOG_FILE_DIR, path) ||
-		strlen(RDS_POSTGRES_LOG_FILE_DIR) + 1 >= strlen(path))
+		!path_is_prefix_of_path(log_file_dir, path) ||
+		strlen(log_file_dir) + 1 >= strlen(path))
 		ereport(ERROR,
 				(errcode(ERRCODE_SYNTAX_ERROR),
 				 errmsg("The log file path specified was invalid."),
@@ -540,6 +579,7 @@ fileGetOptions(Oid foreigntableid,
 						 "server_name text, log_file_name text) to easily "
 						 "create foreign data wrappers to Postgres log files")));
 	pfree(path);
+	pfree(log_file_dir);
 
 	/* determine the format based on the file name */
 	if (pg_str_endswith(*filename, CSV_FILE_EXTENSION)
