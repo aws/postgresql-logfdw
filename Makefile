@@ -1,4 +1,4 @@
-# contrib/log_fdw/Makefile
+# /Makefile
 
 MODULES = log_fdw
 
@@ -14,13 +14,7 @@ REGRESS =
 
 EXTRA_CLEAN = sql/log_fdw.sql expected/log_fdw.out
 
-#ifdef USE_PGXS
 PG_CONFIG = pg_config
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 include $(PGXS)
-#else
-#subdir = contrib/log_fdw
-#top_builddir = ../..
-#include $(top_builddir)/src/Makefile.global
-#include $(top_srcdir)/contrib/contrib-global.mk
-#endif
+

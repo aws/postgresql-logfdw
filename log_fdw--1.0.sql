@@ -1,4 +1,4 @@
-/* contrib/log_fdw/log_fdw--1.0.sql */
+/* /log_fdw--1.0.sql */
 
 -- complain if script is sourced in psql, rather than via CREATE EXTENSION
 \echo Use "CREATE EXTENSION log_fdw" to load this file. \quit
@@ -17,8 +17,6 @@ LANGUAGE C STRICT;
 CREATE FOREIGN DATA WRAPPER log_fdw
   HANDLER log_fdw_handler
   VALIDATOR log_fdw_validator;
-
-
 
 
 CREATE OR REPLACE FUNCTION create_foreign_table_for_log_file(table_name text, server_name text, log_file_name text)
@@ -69,7 +67,6 @@ $BODY$
 	LANGUAGE plpgsql;
 
 
-
 /*
  * Redefine list_postgres_log_files() as an SRF so that queries like
  *
@@ -79,7 +76,7 @@ $BODY$
  *
  *     ERROR:  materialize mode required, but it is not allowed in this context
  */
---ALTER EXTENSION log_fdw DROP FUNCTION list_postgres_log_files();
+
 DROP FUNCTION IF EXISTS list_postgres_log_files();
 CREATE OR REPLACE FUNCTION list_postgres_log_files(
 	OUT file_name TEXT,
@@ -89,7 +86,6 @@ AS 'MODULE_PATHNAME'
 LANGUAGE C STRICT;
 REVOKE ALL ON FUNCTION list_postgres_log_files() FROM PUBLIC;
 --ALTER FUNCTION list_postgres_log_files() OWNER TO rds_superuser;
-
 
 
 REVOKE ALL ON FUNCTION log_fdw_handler() FROM PUBLIC;

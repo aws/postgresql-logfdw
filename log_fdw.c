@@ -6,16 +6,14 @@
  * Copyright (c) 2010-2021, PostgreSQL Global Development Group
  *
  * IDENTIFICATION
- *		  contrib/log_fdw/log_fdw.c
+ *		  /log_fdw.c
  *
  *-------------------------------------------------------------------------
  */
  
 #include "postgres.h"
-
 #include <sys/stat.h>
 #include <unistd.h>
-
 #include "access/htup_details.h"
 #include "access/reloptions.h"
 #include "access/sysattr.h"
@@ -26,14 +24,10 @@
 #include "commands/defrem.h"
 #include "commands/explain.h"
 #include "commands/vacuum.h"
-
 #include "common/string.h"
-
 #include "foreign/fdwapi.h"
 #include "foreign/foreign.h"
-
 #include "funcapi.h"
-
 #include "miscadmin.h"
 #include "nodes/makefuncs.h"
 #include "optimizer/optimizer.h"
@@ -44,14 +38,12 @@
 #include "utils/memutils.h"
 #include "utils/rel.h"
 #include "utils/sampling.h"
-//#include "utils/guc.h"
 
-//#define RDS_POSTGRES_LOG_FILE_DIR	"/home/kadamnn/workplace/pg_14/data/log"
-#define CSV_FILE_EXTENSION		".csv"
+#define CSV_FILE_EXTENSION			".csv"
 #define CSV_GZ_FILE_EXTENSION		".csv.gz"
+
 extern char *Log_directory;
 extern char *DataDir;
-
 
 PG_MODULE_MAGIC;
 
@@ -128,7 +120,6 @@ typedef struct FileFdwExecutionState
  */
 PG_FUNCTION_INFO_V1(log_fdw_handler);
 PG_FUNCTION_INFO_V1(log_fdw_validator);
-
 PG_FUNCTION_INFO_V1(list_postgres_log_files);
 
 /*
@@ -196,7 +187,6 @@ list_postgres_log_files(PG_FUNCTION_ARGS)
 	HeapTuple		tuple;
 	char *			file_path;
 	char *			log_file_dir;
-	
 
 	/* check to see if caller supports us returning a tuplestore */
 	if (!rsinfo || !(rsinfo->allowedModes & SFRM_Materialize))
@@ -234,9 +224,7 @@ list_postgres_log_files(PG_FUNCTION_ARGS)
 	file_path = (char *) palloc(PATH_MAX);
 	log_file_dir = (char *) palloc(PATH_MAX);
 
-
-
-	if (strlen(Log_directory)>0 && Log_directory[0]=='/')
+	if (strlen(Log_directory) > 0 && Log_directory[0] == '/')
 	{
 		strcpy(log_file_dir,Log_directory);
 	} 
@@ -244,8 +232,6 @@ list_postgres_log_files(PG_FUNCTION_ARGS)
 	{
 		snprintf(log_file_dir, PATH_MAX,"%s/%s",DataDir, Log_directory);
 	}
-
-	
 
 	dir = AllocateDir(log_file_dir);
 	while (NULL != (de = ReadDir(dir, log_file_dir)))
@@ -272,7 +258,6 @@ list_postgres_log_files(PG_FUNCTION_ARGS)
 	pfree(file_path);
 	pfree(log_file_dir);
 	
-
 	/*
 	 * no longer need the tuple descriptor reference created by
 	 * TupleDescGetAttInMetadata()
@@ -294,8 +279,6 @@ list_postgres_log_files(PG_FUNCTION_ARGS)
 
 	PG_RETURN_VOID();
 }
-
-
 
 /*
  * Foreign-data wrapper handler function: return a struct with pointers
@@ -497,7 +480,7 @@ fileGetOptions(Oid foreigntableid,
 	List	   *options;
 	ListCell   *lc;
 	char       *path;
-	char *		log_file_dir;
+	char       *log_file_dir;
 
 	/*
 	 * Extract options from FDW objects.  We ignore user mappings because
@@ -556,8 +539,7 @@ fileGetOptions(Oid foreigntableid,
 	//log_file_dir = pstrdup(*filename);
 	log_file_dir = (char *) palloc(PATH_MAX);
 
-
-	if (strlen(Log_directory)>0 && Log_directory[0]=='/')
+	if (strlen(Log_directory) > 0 && Log_directory[0] == '/')
 	{
 		strcpy(log_file_dir,Log_directory);
 	} 
@@ -565,7 +547,6 @@ fileGetOptions(Oid foreigntableid,
 	{
 		snprintf(log_file_dir, PATH_MAX,"%s/%s",DataDir, Log_directory);
 	}
-
 
 	canonicalize_path(path);
 	if (path_contains_parent_reference(path) ||
