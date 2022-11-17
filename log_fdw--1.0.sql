@@ -22,7 +22,18 @@ CREATE FOREIGN DATA WRAPPER log_fdw
 CREATE OR REPLACE FUNCTION create_foreign_table_for_log_file(table_name text, server_name text, log_file_name text)
 RETURNS void AS
 $BODY$
-BEGIN
+
+DECLARE
+log_file_dir TEXT;
+
+BEGIN	
+	SELECT setting INTO log_file_dir FROM pg_settings WHERE name='log_directory';
+	
+    IF substring(log_file_dir FROM 1 for 1) <> '/'
+	THEN
+		SELECT (SELECT setting FROM pg_settings WHERE name = 'data_directory') || '/' || (SELECT setting FROM pg_settings WHERE name = 'log_directory') INTO log_file_dir;
+	END IF;
+
 	IF log_file_name LIKE '%.csv' or log_file_name LIKE '%.csv.gz'
 	THEN
 		EXECUTE format('CREATE FOREIGN TABLE %I (
@@ -54,13 +65,13 @@ BEGIN
 		  query_id			bigint
 		) SERVER %I
 		OPTIONS (filename %L)',
-		table_name, server_name, '/home/kadamnn/workplace/pg_14/data/log/' || log_file_name);
+		table_name, server_name, log_file_dir || '/' || log_file_name);
 	ELSE
 		EXECUTE format('CREATE FOREIGN TABLE %I (
 		  log_entry text
 		) SERVER %I
 		OPTIONS (filename %L)',
-		table_name, server_name, '/home/kadamnn/workplace/pg_14/data/log/' || log_file_name);
+		table_name, server_name, log_file_dir || '/' || log_file_name);
 	END IF;
 END
 $BODY$
@@ -85,7 +96,7 @@ RETURNS setof record
 AS 'MODULE_PATHNAME'
 LANGUAGE C STRICT;
 REVOKE ALL ON FUNCTION list_postgres_log_files() FROM PUBLIC;
---ALTER FUNCTION list_postgres_log_files() OWNER TO rds_superuser;
+ALTER FUNCTION list_postgres_log_files() OWNER TO pg_read_server_files;
 
 
 REVOKE ALL ON FUNCTION log_fdw_handler() FROM PUBLIC;
