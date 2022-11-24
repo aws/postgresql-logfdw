@@ -1,0 +1,906 @@
+--
+-- Test foreign-data wrapper log_fdw.
+--
+-- Clean up in case a prior regression run failed
+SET client_min_messages TO 'error';
+DROP ROLE IF EXISTS log_fdw_superuser, log_fdw_user, no_priv_user, "rds_superuser";
+RESET client_min_messages;
+CREATE ROLE log_fdw_superuser LOGIN SUPERUSER; -- is a superuser
+CREATE ROLE log_fdw_user LOGIN;                -- has priv and user mapping
+CREATE ROLE no_priv_user LOGIN;                 -- has priv but no user mapping
+CREATE ROLE "rds_superuser" nosuperuser nologin nocreaterole inherit noreplication;
+DROP extension if exists log_fdw;
+NOTICE:  extension "log_fdw" does not exist, skipping
+-- Install log_fdw
+CREATE EXTENSION log_fdw;
+-- log_fdw_superuser owns fdw-related objects
+SET ROLE log_fdw_superuser;
+CREATE SERVER log_server FOREIGN DATA WRAPPER log_fdw;
+-- privilege tests
+SET ROLE log_fdw_user;
+CREATE FOREIGN DATA WRAPPER log_fdw2 HANDLER log_fdw_handler VALIDATOR log_fdw_validator;   -- ERROR
+ERROR:  permission denied to create foreign-data wrapper "log_fdw2"
+HINT:  Must be superuser to create a foreign-data wrapper.
+CREATE SERVER log_server2 FOREIGN DATA WRAPPER log_fdw;   -- ERROR
+ERROR:  permission denied for foreign-data wrapper log_fdw
+CREATE USER MAPPING FOR log_fdw_user SERVER log_server;   -- ERROR
+ERROR:  permission denied for foreign server log_server
+SET ROLE log_fdw_superuser;
+GRANT USAGE ON FOREIGN SERVER log_server TO log_fdw_user;
+SET ROLE log_fdw_user;
+CREATE USER MAPPING FOR log_fdw_user SERVER log_server;
+-- create user mappings and grant privilege to test users
+SET ROLE log_fdw_superuser;
+CREATE USER MAPPING FOR log_fdw_superuser SERVER log_server;
+CREATE USER MAPPING FOR no_priv_user SERVER log_server;
+-- validator tests
+CREATE FOREIGN TABLE tbl () SERVER log_server OPTIONS (format 'xml');  -- ERROR
+ERROR:  invalid option "format"
+HINT:  Valid options in this context are: filename
+CREATE FOREIGN TABLE tbl () SERVER log_server OPTIONS (format 'text', header 'true');      -- ERROR
+ERROR:  invalid option "format"
+HINT:  Valid options in this context are: filename
+CREATE FOREIGN TABLE tbl () SERVER log_server OPTIONS (format 'text', quote ':');          -- ERROR
+ERROR:  invalid option "format"
+HINT:  Valid options in this context are: filename
+CREATE FOREIGN TABLE tbl () SERVER log_server OPTIONS (format 'text', escape ':');         -- ERROR
+ERROR:  invalid option "format"
+HINT:  Valid options in this context are: filename
+CREATE FOREIGN TABLE tbl () SERVER log_server OPTIONS (format 'binary', header 'true');    -- ERROR
+ERROR:  invalid option "format"
+HINT:  Valid options in this context are: filename
+CREATE FOREIGN TABLE tbl () SERVER log_server OPTIONS (format 'binary', quote ':');        -- ERROR
+ERROR:  invalid option "format"
+HINT:  Valid options in this context are: filename
+CREATE FOREIGN TABLE tbl () SERVER log_server OPTIONS (format 'binary', escape ':');       -- ERROR
+ERROR:  invalid option "format"
+HINT:  Valid options in this context are: filename
+CREATE FOREIGN TABLE tbl () SERVER log_server OPTIONS (format 'text', delimiter 'a');      -- ERROR
+ERROR:  invalid option "format"
+HINT:  Valid options in this context are: filename
+CREATE FOREIGN TABLE tbl () SERVER log_server OPTIONS (format 'text', escape '-');         -- ERROR
+ERROR:  invalid option "format"
+HINT:  Valid options in this context are: filename
+CREATE FOREIGN TABLE tbl () SERVER log_server OPTIONS (format 'csv', quote '-', null '=-=');   -- ERROR
+ERROR:  invalid option "format"
+HINT:  Valid options in this context are: filename
+CREATE FOREIGN TABLE tbl () SERVER log_server OPTIONS (format 'csv', delimiter '-', null '=-=');    -- ERROR
+ERROR:  invalid option "format"
+HINT:  Valid options in this context are: filename
+CREATE FOREIGN TABLE tbl () SERVER log_server OPTIONS (format 'csv', delimiter '-', quote '-');    -- ERROR
+ERROR:  invalid option "format"
+HINT:  Valid options in this context are: filename
+CREATE FOREIGN TABLE tbl () SERVER log_server OPTIONS (format 'csv', delimiter '---');     -- ERROR
+ERROR:  invalid option "format"
+HINT:  Valid options in this context are: filename
+CREATE FOREIGN TABLE tbl () SERVER log_server OPTIONS (format 'csv', quote '---');         -- ERROR
+ERROR:  invalid option "format"
+HINT:  Valid options in this context are: filename
+CREATE FOREIGN TABLE tbl () SERVER log_server OPTIONS (format 'csv', escape '---');        -- ERROR
+ERROR:  invalid option "format"
+HINT:  Valid options in this context are: filename
+CREATE FOREIGN TABLE tbl () SERVER log_server OPTIONS (format 'text', delimiter '\');       -- ERROR
+ERROR:  invalid option "format"
+HINT:  Valid options in this context are: filename
+CREATE FOREIGN TABLE tbl () SERVER log_server OPTIONS (format 'text', delimiter '.');       -- ERROR
+ERROR:  invalid option "format"
+HINT:  Valid options in this context are: filename
+CREATE FOREIGN TABLE tbl () SERVER log_server OPTIONS (format 'text', delimiter '1');       -- ERROR
+ERROR:  invalid option "format"
+HINT:  Valid options in this context are: filename
+CREATE FOREIGN TABLE tbl () SERVER log_server OPTIONS (format 'text', delimiter 'a');       -- ERROR
+ERROR:  invalid option "format"
+HINT:  Valid options in this context are: filename
+CREATE FOREIGN TABLE tbl () SERVER log_server OPTIONS (format 'csv', delimiter '');       -- ERROR
+ERROR:  invalid option "format"
+HINT:  Valid options in this context are: filename
+CREATE FOREIGN TABLE tbl () SERVER log_server OPTIONS (format 'csv', null '');       -- ERROR
+ERROR:  invalid option "format"
+HINT:  Valid options in this context are: filename
+CREATE FOREIGN TABLE tbl () SERVER log_server;  -- ERROR
+ERROR:  filename is required for log_fdw foreign tables
+-- file path validation tests
+CREATE FOREIGN TABLE agg_text (
+	a	int2 CHECK (a >= 0),
+	b	float4
+) SERVER log_server
+OPTIONS (filename 'a');
+ERROR:  The log file path specified was invalid.
+HINT:  Use list_postgres_log_files() and create_foreign_table_for_log_file(table_name text, server_name text, log_file_name text) to easily create foreign data wrappers to Postgres log files
+CREATE FOREIGN TABLE agg_text (
+        a       int2 CHECK (a >= 0),
+        b       float4
+) SERVER log_server
+OPTIONS (filename 'alsdfkjalskdjfhlsdkjhasdflkjahsdflkjhasdflkjhasdlfkjahsdlfkjhasdlkfjhasdf');
+ERROR:  The log file path specified was invalid.
+HINT:  Use list_postgres_log_files() and create_foreign_table_for_log_file(table_name text, server_name text, log_file_name text) to easily create foreign data wrappers to Postgres log files
+CREATE FOREIGN TABLE agg_text (
+        a       int2 CHECK (a >= 0),
+        b       float4
+) SERVER log_server
+OPTIONS (filename '/rdsdbdata/log/error/../../../hax.csv');
+ERROR:  The log file path specified was invalid.
+HINT:  Use list_postgres_log_files() and create_foreign_table_for_log_file(table_name text, server_name text, log_file_name text) to easily create foreign data wrappers to Postgres log files
+CREATE FOREIGN TABLE agg_text (
+        a       int2 CHECK (a >= 0),
+        b       float4
+) SERVER log_server
+OPTIONS (filename '/rdsdbdata/log/error/postgresql.log.abcdef.csv');
+ERROR:  The log file path specified was invalid.
+HINT:  Use list_postgres_log_files() and create_foreign_table_for_log_file(table_name text, server_name text, log_file_name text) to easily create foreign data wrappers to Postgres log files
+CREATE FOREIGN TABLE pglog_1 (
+  log_time timestamp(3) with time zone,
+  user_name text,
+  database_name text,
+  process_id integer,
+  connection_from text,
+  session_id text,
+  session_line_num bigint,
+  command_tag text,
+  session_start_time timestamp with time zone,
+  virtual_transaction_id text,
+  transaction_id bigint,
+  error_severity text,
+  sql_state_code text,
+  message text,
+  detail text,
+  hint text,
+  internal_query text,
+  internal_query_pos integer,
+  context text,
+  query text,
+  query_pos integer,
+  location text,
+  application_name text,
+  backend_type text,
+  leader_pid integer,
+  query_id bigint
+) SERVER log_server
+OPTIONS ( filename '/rdsdbdata/log/error/postgresql.log.2016-08-09-22.csv');
+ERROR:  The log file path specified was invalid.
+HINT:  Use list_postgres_log_files() and create_foreign_table_for_log_file(table_name text, server_name text, log_file_name text) to easily create foreign data wrappers to Postgres log files
+GRANT SELECT ON pglog_1 to log_fdw_user;
+ERROR:  relation "pglog_1" does not exist
+ALTER FOREIGN TABLE pglog_1 ADD CHECK (process_id > 0);
+ERROR:  relation "pglog_1" does not exist
+CREATE FOREIGN TABLE pglog_2 (
+  log_time timestamp(3) with time zone,
+  user_name text,
+  database_name text,
+  process_id integer,
+  connection_from text,
+  session_id text,
+  session_line_num bigint,
+  command_tag text,
+  session_start_time timestamp with time zone,
+  virtual_transaction_id text,
+  transaction_id bigint,
+  error_severity text,
+  sql_state_code text,
+  message text,
+  detail text,
+  hint text,
+  internal_query text,
+  internal_query_pos integer,
+  context text,
+  query text,
+  query_pos integer,
+  location text,
+  application_name text,
+  backend_type text,
+  leader_pid integer,
+  query_id bigint
+) SERVER log_server
+OPTIONS ( filename '/rdsdbdata/log/error/postgresql.log.2016-08-09-23.csv');
+ERROR:  The log file path specified was invalid.
+HINT:  Use list_postgres_log_files() and create_foreign_table_for_log_file(table_name text, server_name text, log_file_name text) to easily create foreign data wrappers to Postgres log files
+ALTER FOREIGN TABLE pglog_2 ADD CHECK (process_id > 0);
+ERROR:  relation "pglog_2" does not exist
+CREATE FOREIGN TABLE pglog_3 (
+  log_time timestamp(3) with time zone,
+  user_name text,
+  database_name text,
+  process_id integer,
+  connection_from text,
+  session_id text,
+  session_line_num bigint,
+  command_tag text,
+  session_start_time timestamp with time zone,
+  virtual_transaction_id text,
+  transaction_id bigint,
+  error_severity text,
+  sql_state_code text,
+  message text,
+  detail text,
+  hint text,
+  internal_query text,
+  internal_query_pos integer,
+  context text,
+  query text,
+  query_pos integer,
+  location text,
+  application_name text,
+  backend_type text,
+  leader_pid integer,
+  query_id bigint
+) SERVER log_server
+OPTIONS ( filename '/rdsdbdata/log/error/postgresql.log.2016-08-10-00.csv');
+ERROR:  The log file path specified was invalid.
+HINT:  Use list_postgres_log_files() and create_foreign_table_for_log_file(table_name text, server_name text, log_file_name text) to easily create foreign data wrappers to Postgres log files
+ALTER FOREIGN TABLE pglog_3 ADD CHECK (process_id > 0);
+ERROR:  relation "pglog_3" does not exist
+CREATE FOREIGN TABLE pglog_bad (
+  user_name text,
+  database_name text,
+  process_id integer,
+  connection_from text,
+  session_id text,
+  session_line_num bigint,
+  command_tag text,
+  session_start_time timestamp with time zone,
+  virtual_transaction_id text,
+  transaction_id bigint,
+  error_severity text,
+  sql_state_code text,
+  message text,
+  detail text,
+  hint text,
+  internal_query text,
+  internal_query_pos integer,
+  context text,
+  query text
+) SERVER log_server
+OPTIONS ( filename '/rdsdbdata/log/error/postgresql.log.2016-08-10-01.csv');
+ERROR:  The log file path specified was invalid.
+HINT:  Use list_postgres_log_files() and create_foreign_table_for_log_file(table_name text, server_name text, log_file_name text) to easily create foreign data wrappers to Postgres log files
+-- basic query tests
+SELECT log_time, process_id, error_severity, message FROM pglog_1 where error_severity = 'LOG';
+ERROR:  relation "pglog_1" does not exist
+LINE 1: ...og_time, process_id, error_severity, message FROM pglog_1 wh...
+                                                             ^
+SELECT log_time, process_id, error_severity, message FROM pglog_2 ORDER BY log_time DESC;
+ERROR:  relation "pglog_2" does not exist
+LINE 1: ...og_time, process_id, error_severity, message FROM pglog_2 OR...
+                                                             ^
+SELECT log_time, process_id, error_severity, message FROM pglog_3 where log_time = 'Tue Aug 09 15:45:20.066 2016 PDT';
+ERROR:  relation "pglog_3" does not exist
+LINE 1: ...og_time, process_id, error_severity, message FROM pglog_3 wh...
+                                                             ^
+-- error context report tests
+SELECT * FROM pglog_bad;               -- ERROR
+ERROR:  relation "pglog_bad" does not exist
+LINE 1: SELECT * FROM pglog_bad;
+                      ^
+-- misc query tests
+\t on
+EXPLAIN (VERBOSE, COSTS FALSE) SELECT * FROM pglog_1;
+ERROR:  relation "pglog_1" does not exist
+LINE 1: EXPLAIN (VERBOSE, COSTS FALSE) SELECT * FROM pglog_1;
+                                                     ^
+\t off
+PREPARE st(text) AS SELECT * FROM pglog_1 WHERE error_severity = $1;
+ERROR:  relation "pglog_1" does not exist
+LINE 1: PREPARE st(text) AS SELECT * FROM pglog_1 WHERE error_severi...
+                                          ^
+EXECUTE st('DEBUG');
+ERROR:  prepared statement "st" does not exist
+EXECUTE st('DEBUG');
+ERROR:  prepared statement "st" does not exist
+DEALLOCATE st;
+ERROR:  prepared statement "st" does not exist
+-- tableoid
+SELECT tableoid::regclass, log_time FROM pglog_2;
+ERROR:  relation "pglog_2" does not exist
+LINE 1: SELECT tableoid::regclass, log_time FROM pglog_2;
+                                                 ^
+-- updates aren't supported
+UPDATE pglog_1 SET error_severity = 'WARNING';
+ERROR:  relation "pglog_1" does not exist
+LINE 1: UPDATE pglog_1 SET error_severity = 'WARNING';
+               ^
+DELETE FROM pglog_2 WHERE error_severity = 'DEBUG';
+ERROR:  relation "pglog_2" does not exist
+LINE 1: DELETE FROM pglog_2 WHERE error_severity = 'DEBUG';
+                    ^
+-- but this should be allowed
+SELECT * FROM pglog_3 FOR UPDATE;
+ERROR:  relation "pglog_3" does not exist
+LINE 1: SELECT * FROM pglog_3 FOR UPDATE;
+                      ^
+-- constraint exclusion tests
+\t on
+EXPLAIN (VERBOSE, COSTS FALSE) SELECT * FROM pglog_1 WHERE process_id < 0;
+ERROR:  relation "pglog_1" does not exist
+LINE 1: EXPLAIN (VERBOSE, COSTS FALSE) SELECT * FROM pglog_1 WHERE p...
+                                                     ^
+\t off
+SELECT * FROM pglog_1 WHERE process_id < 0;
+ERROR:  relation "pglog_1" does not exist
+LINE 1: SELECT * FROM pglog_1 WHERE process_id < 0;
+                      ^
+SET constraint_exclusion = 'on';
+\t on
+EXPLAIN (VERBOSE, COSTS FALSE) SELECT * FROM pglog_1 WHERE process_id < 0;
+ERROR:  relation "pglog_1" does not exist
+LINE 1: EXPLAIN (VERBOSE, COSTS FALSE) SELECT * FROM pglog_1 WHERE p...
+                                                     ^
+\t off
+SELECT * FROM pglog_1 WHERE process_id < 0;
+ERROR:  relation "pglog_1" does not exist
+LINE 1: SELECT * FROM pglog_1 WHERE process_id < 0;
+                      ^
+RESET constraint_exclusion;
+-- table inheritance tests
+CREATE TABLE agg (
+  log_time timestamp(3) with time zone,
+  user_name text,
+  database_name text,
+  process_id integer,
+  connection_from text,
+  session_id text,
+  session_line_num bigint,
+  command_tag text,
+  session_start_time timestamp with time zone,
+  virtual_transaction_id text,
+  transaction_id bigint,
+  error_severity text,
+  sql_state_code text,
+  message text,
+  detail text,
+  hint text,
+  internal_query text,
+  internal_query_pos integer,
+  context text,
+  query text,
+  query_pos integer,
+  location text,
+  application_name text,
+  backend_type text,
+  leader_pid integer,
+  query_id bigint);
+ALTER FOREIGN TABLE pglog_1 INHERIT agg;
+ERROR:  relation "pglog_1" does not exist
+SELECT tableoid::regclass, * FROM agg;
+ tableoid | log_time | user_name | database_name | process_id | connection_from | session_id | session_line_num | command_tag | session_start_time | virtual_transaction_id | transaction_id | error_severity | sql_state_code | message | detail | hint | internal_query | internal_query_pos | context | query | query_pos | location | application_name | backend_type | leader_pid | query_id 
+----------+----------+-----------+---------------+------------+-----------------+------------+------------------+-------------+--------------------+------------------------+----------------+----------------+----------------+---------+--------+------+----------------+--------------------+---------+-------+-----------+----------+------------------+--------------+------------+----------
+(0 rows)
+
+SELECT tableoid::regclass, * FROM pglog_1;
+ERROR:  relation "pglog_1" does not exist
+LINE 1: SELECT tableoid::regclass, * FROM pglog_1;
+                                          ^
+SELECT tableoid::regclass, * FROM ONLY agg;
+ tableoid | log_time | user_name | database_name | process_id | connection_from | session_id | session_line_num | command_tag | session_start_time | virtual_transaction_id | transaction_id | error_severity | sql_state_code | message | detail | hint | internal_query | internal_query_pos | context | query | query_pos | location | application_name | backend_type | leader_pid | query_id 
+----------+----------+-----------+---------------+------------+-----------------+------------+------------------+-------------+--------------------+------------------------+----------------+----------------+----------------+---------+--------+------+----------------+--------------------+---------+-------+-----------+----------+------------------+--------------+------------+----------
+(0 rows)
+
+-- updates aren't supported
+UPDATE agg SET error_severity = 'WARNING';
+DELETE FROM agg WHERE error_severity = 'LOG';
+-- but this should be allowed
+SELECT tableoid::regclass, * FROM agg FOR UPDATE;
+ tableoid | log_time | user_name | database_name | process_id | connection_from | session_id | session_line_num | command_tag | session_start_time | virtual_transaction_id | transaction_id | error_severity | sql_state_code | message | detail | hint | internal_query | internal_query_pos | context | query | query_pos | location | application_name | backend_type | leader_pid | query_id 
+----------+----------+-----------+---------------+------------+-----------------+------------+------------------+-------------+--------------------+------------------------+----------------+----------------+----------------+---------+--------+------+----------------+--------------------+---------+-------+-----------+----------+------------------+--------------+------------+----------
+(0 rows)
+
+ALTER FOREIGN TABLE pglog_1 NO INHERIT agg;
+ERROR:  relation "pglog_1" does not exist
+DROP TABLE agg;
+-- privilege tests
+SET ROLE log_fdw_superuser;
+SELECT * FROM pglog_2 ORDER BY log_time;
+ERROR:  relation "pglog_2" does not exist
+LINE 1: SELECT * FROM pglog_2 ORDER BY log_time;
+                      ^
+SET ROLE log_fdw_user;
+SELECT * FROM pglog_2 ORDER BY log_time;
+ERROR:  relation "pglog_2" does not exist
+LINE 1: SELECT * FROM pglog_2 ORDER BY log_time;
+                      ^
+SET ROLE no_priv_user;
+SELECT * FROM pglog_2 ORDER BY log_time;   -- ERROR
+ERROR:  relation "pglog_2" does not exist
+LINE 1: SELECT * FROM pglog_2 ORDER BY log_time;
+                      ^
+SET ROLE log_fdw_user;
+\t on
+EXPLAIN (VERBOSE, COSTS FALSE) SELECT * FROM pglog_2 WHERE process_id > 0;
+ERROR:  relation "pglog_2" does not exist
+LINE 1: EXPLAIN (VERBOSE, COSTS FALSE) SELECT * FROM pglog_2 WHERE p...
+                                                     ^
+\t off
+-- log FDW allows foreign tables to be accessed without user mapping
+DROP USER MAPPING FOR log_fdw_user SERVER log_server;
+SELECT * FROM pglog_2 ORDER BY log_time;
+ERROR:  relation "pglog_2" does not exist
+LINE 1: SELECT * FROM pglog_2 ORDER BY log_time;
+                      ^
+-- privilege tests for object
+SET ROLE log_fdw_superuser;
+ALTER FOREIGN TABLE pglog_3 OWNER TO log_fdw_user;
+ERROR:  relation "pglog_3" does not exist
+ALTER FOREIGN TABLE pglog_3 OPTIONS (SET filename 'a');
+ERROR:  relation "pglog_3" does not exist
+ALTER FOREIGN TABLE pglog_3 OPTIONS (SET format 'text');
+ERROR:  relation "pglog_3" does not exist
+ALTER FOREIGN TABLE pglog_3 OPTIONS (SET filename '/rdsdbdata/log/error/postgresql.log.2016-08-10-01.csv');
+ERROR:  relation "pglog_3" does not exist
+SET ROLE log_fdw_user;
+ALTER FOREIGN TABLE pglog_3 OPTIONS (SET filename '/rdsdbdata/log/error/postgresql.log.2016-08-10-01.csv');
+ERROR:  relation "pglog_3" does not exist
+SET ROLE log_fdw_superuser;
+-- make sure list function works
+SELECT * from list_postgres_log_files() order by 1;
+ERROR:  could not open directory "/rdsdbdata/log/error": No such file or directory
+SELECT list_postgres_log_files() ORDER BY 1;
+ERROR:  could not open directory "/rdsdbdata/log/error": No such file or directory
+-- make sure helper function for creating table works
+SELECT create_foreign_table_for_log_file('my_postgres_error_log', 'log_server', 'postgresql.log.2016-08-09-22.csv');
+ERROR:  The log file path specified was invalid.
+HINT:  Use list_postgres_log_files() and create_foreign_table_for_log_file(table_name text, server_name text, log_file_name text) to easily create foreign data wrappers to Postgres log files
+CONTEXT:  SQL statement "CREATE FOREIGN TABLE my_postgres_error_log (
+		  log_time			timestamp(3) with time zone,
+		  user_name			text,
+		  database_name			text,
+		  process_id			integer,
+		  connection_from		text,
+		  session_id			text,
+		  session_line_num		bigint,
+		  command_tag			text,
+		  session_start_time		timestamp with time zone,
+		  virtual_transaction_id	text,
+		  transaction_id		bigint,
+		  error_severity		text,
+		  sql_state_code		text,
+		  message			text,
+		  detail			text,
+		  hint				text,
+		  internal_query		text,
+		  internal_query_pos		integer,
+		  context			text,
+		  query				text,
+		  query_pos			integer,
+		  location			text,
+		  application_name		text,
+		  backend_type			text,
+		  leader_pid			integer,
+		  query_id			bigint
+		) SERVER log_server
+		OPTIONS (filename '/rdsdbdata/log/error/postgresql.log.2016-08-09-22.csv')"
+PL/pgSQL function create_foreign_table_for_log_file(text,text,text) line 5 at EXECUTE
+SELECT log_time, message from my_postgres_error_log order by 1;
+ERROR:  relation "my_postgres_error_log" does not exist
+LINE 1: SELECT log_time, message from my_postgres_error_log order by...
+                                      ^
+-- make sure helper function for creating table errors out at appropriate times
+SELECT create_foreign_table_for_log_file('my_postgres_error_log_2', 'log_server', 'postgresql.log.doesnt_exist.csv');
+ERROR:  The log file path specified was invalid.
+HINT:  Use list_postgres_log_files() and create_foreign_table_for_log_file(table_name text, server_name text, log_file_name text) to easily create foreign data wrappers to Postgres log files
+CONTEXT:  SQL statement "CREATE FOREIGN TABLE my_postgres_error_log_2 (
+		  log_time			timestamp(3) with time zone,
+		  user_name			text,
+		  database_name			text,
+		  process_id			integer,
+		  connection_from		text,
+		  session_id			text,
+		  session_line_num		bigint,
+		  command_tag			text,
+		  session_start_time		timestamp with time zone,
+		  virtual_transaction_id	text,
+		  transaction_id		bigint,
+		  error_severity		text,
+		  sql_state_code		text,
+		  message			text,
+		  detail			text,
+		  hint				text,
+		  internal_query		text,
+		  internal_query_pos		integer,
+		  context			text,
+		  query				text,
+		  query_pos			integer,
+		  location			text,
+		  application_name		text,
+		  backend_type			text,
+		  leader_pid			integer,
+		  query_id			bigint
+		) SERVER log_server
+		OPTIONS (filename '/rdsdbdata/log/error/postgresql.log.doesnt_exist.csv')"
+PL/pgSQL function create_foreign_table_for_log_file(text,text,text) line 5 at EXECUTE
+SELECT create_foreign_table_for_log_file('my_postgres_error_log', 'log_server', 'postgresql.log.2016-08-09-22.csv');
+ERROR:  The log file path specified was invalid.
+HINT:  Use list_postgres_log_files() and create_foreign_table_for_log_file(table_name text, server_name text, log_file_name text) to easily create foreign data wrappers to Postgres log files
+CONTEXT:  SQL statement "CREATE FOREIGN TABLE my_postgres_error_log (
+		  log_time			timestamp(3) with time zone,
+		  user_name			text,
+		  database_name			text,
+		  process_id			integer,
+		  connection_from		text,
+		  session_id			text,
+		  session_line_num		bigint,
+		  command_tag			text,
+		  session_start_time		timestamp with time zone,
+		  virtual_transaction_id	text,
+		  transaction_id		bigint,
+		  error_severity		text,
+		  sql_state_code		text,
+		  message			text,
+		  detail			text,
+		  hint				text,
+		  internal_query		text,
+		  internal_query_pos		integer,
+		  context			text,
+		  query				text,
+		  query_pos			integer,
+		  location			text,
+		  application_name		text,
+		  backend_type			text,
+		  leader_pid			integer,
+		  query_id			bigint
+		) SERVER log_server
+		OPTIONS (filename '/rdsdbdata/log/error/postgresql.log.2016-08-09-22.csv')"
+PL/pgSQL function create_foreign_table_for_log_file(text,text,text) line 5 at EXECUTE
+SELECT create_foreign_table_for_log_file('my_postgres_error_log_2', 'doesnt_exist', 'postgresql.log.2016-08-09-22.csv');
+ERROR:  server "doesnt_exist" does not exist
+CONTEXT:  SQL statement "CREATE FOREIGN TABLE my_postgres_error_log_2 (
+		  log_time			timestamp(3) with time zone,
+		  user_name			text,
+		  database_name			text,
+		  process_id			integer,
+		  connection_from		text,
+		  session_id			text,
+		  session_line_num		bigint,
+		  command_tag			text,
+		  session_start_time		timestamp with time zone,
+		  virtual_transaction_id	text,
+		  transaction_id		bigint,
+		  error_severity		text,
+		  sql_state_code		text,
+		  message			text,
+		  detail			text,
+		  hint				text,
+		  internal_query		text,
+		  internal_query_pos		integer,
+		  context			text,
+		  query				text,
+		  query_pos			integer,
+		  location			text,
+		  application_name		text,
+		  backend_type			text,
+		  leader_pid			integer,
+		  query_id			bigint
+		) SERVER doesnt_exist
+		OPTIONS (filename '/rdsdbdata/log/error/postgresql.log.2016-08-09-22.csv')"
+PL/pgSQL function create_foreign_table_for_log_file(text,text,text) line 5 at EXECUTE
+SELECT create_foreign_table_for_log_file(123, 456, 789);
+ERROR:  function create_foreign_table_for_log_file(integer, integer, integer) does not exist
+LINE 1: SELECT create_foreign_table_for_log_file(123, 456, 789);
+               ^
+HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
+-- double check the identifier quoting
+SELECT create_foreign_table_for_log_file('quote me', 'log_server', 'postgresql.log.2016-08-09-22.csv');
+ERROR:  The log file path specified was invalid.
+HINT:  Use list_postgres_log_files() and create_foreign_table_for_log_file(table_name text, server_name text, log_file_name text) to easily create foreign data wrappers to Postgres log files
+CONTEXT:  SQL statement "CREATE FOREIGN TABLE "quote me" (
+		  log_time			timestamp(3) with time zone,
+		  user_name			text,
+		  database_name			text,
+		  process_id			integer,
+		  connection_from		text,
+		  session_id			text,
+		  session_line_num		bigint,
+		  command_tag			text,
+		  session_start_time		timestamp with time zone,
+		  virtual_transaction_id	text,
+		  transaction_id		bigint,
+		  error_severity		text,
+		  sql_state_code		text,
+		  message			text,
+		  detail			text,
+		  hint				text,
+		  internal_query		text,
+		  internal_query_pos		integer,
+		  context			text,
+		  query				text,
+		  query_pos			integer,
+		  location			text,
+		  application_name		text,
+		  backend_type			text,
+		  leader_pid			integer,
+		  query_id			bigint
+		) SERVER log_server
+		OPTIONS (filename '/rdsdbdata/log/error/postgresql.log.2016-08-09-22.csv')"
+PL/pgSQL function create_foreign_table_for_log_file(text,text,text) line 5 at EXECUTE
+SELECT log_time, message from "quote me" order by 1;
+ERROR:  relation "quote me" does not exist
+LINE 1: SELECT log_time, message from "quote me" order by 1;
+                                      ^
+-- make sure you cannot hax the helper function for creating table
+SELECT create_foreign_table_for_log_file('dealwithit"; select 1; --', 'whatever', 'whatever');
+ERROR:  server "whatever" does not exist
+CONTEXT:  SQL statement "CREATE FOREIGN TABLE "dealwithit""; select 1; --" (
+		  log_entry text
+		) SERVER whatever
+		OPTIONS (filename '/rdsdbdata/log/error/whatever')"
+PL/pgSQL function create_foreign_table_for_log_file(text,text,text) line 36 at EXECUTE
+-- make sure you cannot create a foreign table for the log directory or its parent directory
+SELECT create_foreign_table_for_log_file('postgres_log_dir', 'log_server', '.');
+ERROR:  The log file path specified was invalid.
+HINT:  Use list_postgres_log_files() and create_foreign_table_for_log_file(table_name text, server_name text, log_file_name text) to easily create foreign data wrappers to Postgres log files
+CONTEXT:  SQL statement "CREATE FOREIGN TABLE postgres_log_dir (
+		  log_entry text
+		) SERVER log_server
+		OPTIONS (filename '/rdsdbdata/log/error/.')"
+PL/pgSQL function create_foreign_table_for_log_file(text,text,text) line 36 at EXECUTE
+SELECT create_foreign_table_for_log_file('postgres_log_dir', 'log_server', '..');
+ERROR:  The log file path specified was invalid.
+HINT:  Use list_postgres_log_files() and create_foreign_table_for_log_file(table_name text, server_name text, log_file_name text) to easily create foreign data wrappers to Postgres log files
+CONTEXT:  SQL statement "CREATE FOREIGN TABLE postgres_log_dir (
+		  log_entry text
+		) SERVER log_server
+		OPTIONS (filename '/rdsdbdata/log/error/..')"
+PL/pgSQL function create_foreign_table_for_log_file(text,text,text) line 36 at EXECUTE
+SELECT create_foreign_table_for_log_file('postgres_log_dir', 'log_server', '');
+ERROR:  The log file path specified was invalid.
+HINT:  Use list_postgres_log_files() and create_foreign_table_for_log_file(table_name text, server_name text, log_file_name text) to easily create foreign data wrappers to Postgres log files
+CONTEXT:  SQL statement "CREATE FOREIGN TABLE postgres_log_dir (
+		  log_entry text
+		) SERVER log_server
+		OPTIONS (filename '/rdsdbdata/log/error/')"
+PL/pgSQL function create_foreign_table_for_log_file(text,text,text) line 36 at EXECUTE
+-- make sure you can create foreign table for non-CSV files
+SELECT create_foreign_table_for_log_file('sonnet116', 'log_server', 'sonnet116.txt');
+ERROR:  The log file path specified was invalid.
+HINT:  Use list_postgres_log_files() and create_foreign_table_for_log_file(table_name text, server_name text, log_file_name text) to easily create foreign data wrappers to Postgres log files
+CONTEXT:  SQL statement "CREATE FOREIGN TABLE sonnet116 (
+		  log_entry text
+		) SERVER log_server
+		OPTIONS (filename '/rdsdbdata/log/error/sonnet116.txt')"
+PL/pgSQL function create_foreign_table_for_log_file(text,text,text) line 36 at EXECUTE
+SELECT create_foreign_table_for_log_file('n', 'log_server', 'n');
+ERROR:  The log file path specified was invalid.
+HINT:  Use list_postgres_log_files() and create_foreign_table_for_log_file(table_name text, server_name text, log_file_name text) to easily create foreign data wrappers to Postgres log files
+CONTEXT:  SQL statement "CREATE FOREIGN TABLE n (
+		  log_entry text
+		) SERVER log_server
+		OPTIONS (filename '/rdsdbdata/log/error/n')"
+PL/pgSQL function create_foreign_table_for_log_file(text,text,text) line 36 at EXECUTE
+SELECT * from sonnet116;
+ERROR:  relation "sonnet116" does not exist
+LINE 1: SELECT * from sonnet116;
+                      ^
+SELECT * from n;
+ERROR:  relation "n" does not exist
+LINE 1: SELECT * from n;
+                      ^
+-- make sure we can create foreign table for compressed csv and non-csv files
+SELECT create_foreign_table_for_log_file('sonnet116_compressed', 'log_server', 'sonnet116.compressed.txt.gz');
+ERROR:  The log file path specified was invalid.
+HINT:  Use list_postgres_log_files() and create_foreign_table_for_log_file(table_name text, server_name text, log_file_name text) to easily create foreign data wrappers to Postgres log files
+CONTEXT:  SQL statement "CREATE FOREIGN TABLE sonnet116_compressed (
+		  log_entry text
+		) SERVER log_server
+		OPTIONS (filename '/rdsdbdata/log/error/sonnet116.compressed.txt.gz')"
+PL/pgSQL function create_foreign_table_for_log_file(text,text,text) line 36 at EXECUTE
+SELECT create_foreign_table_for_log_file('pglog_compressed', 'log_server', 'postgresql.log.2016-08-09-22.compressed.csv.gz');
+ERROR:  The log file path specified was invalid.
+HINT:  Use list_postgres_log_files() and create_foreign_table_for_log_file(table_name text, server_name text, log_file_name text) to easily create foreign data wrappers to Postgres log files
+CONTEXT:  SQL statement "CREATE FOREIGN TABLE pglog_compressed (
+		  log_time			timestamp(3) with time zone,
+		  user_name			text,
+		  database_name			text,
+		  process_id			integer,
+		  connection_from		text,
+		  session_id			text,
+		  session_line_num		bigint,
+		  command_tag			text,
+		  session_start_time		timestamp with time zone,
+		  virtual_transaction_id	text,
+		  transaction_id		bigint,
+		  error_severity		text,
+		  sql_state_code		text,
+		  message			text,
+		  detail			text,
+		  hint				text,
+		  internal_query		text,
+		  internal_query_pos		integer,
+		  context			text,
+		  query				text,
+		  query_pos			integer,
+		  location			text,
+		  application_name		text,
+		  backend_type			text,
+		  leader_pid			integer,
+		  query_id			bigint
+		) SERVER log_server
+		OPTIONS (filename '/rdsdbdata/log/error/postgresql.log.2016-08-09-22.compressed.csv.gz')"
+PL/pgSQL function create_foreign_table_for_log_file(text,text,text) line 5 at EXECUTE
+SELECT * from sonnet116_compressed;
+ERROR:  relation "sonnet116_compressed" does not exist
+LINE 1: SELECT * from sonnet116_compressed;
+                      ^
+SELECT log_time, message from "pglog_compressed" order by 1;
+ERROR:  relation "pglog_compressed" does not exist
+LINE 1: SELECT log_time, message from "pglog_compressed" order by 1;
+                                      ^
+-- make sure badly formatted compressed files throw error
+SELECT create_foreign_table_for_log_file('badcsv_compressed', 'log_server', 'badcsvformat.csv.gz');
+ERROR:  The log file path specified was invalid.
+HINT:  Use list_postgres_log_files() and create_foreign_table_for_log_file(table_name text, server_name text, log_file_name text) to easily create foreign data wrappers to Postgres log files
+CONTEXT:  SQL statement "CREATE FOREIGN TABLE badcsv_compressed (
+		  log_time			timestamp(3) with time zone,
+		  user_name			text,
+		  database_name			text,
+		  process_id			integer,
+		  connection_from		text,
+		  session_id			text,
+		  session_line_num		bigint,
+		  command_tag			text,
+		  session_start_time		timestamp with time zone,
+		  virtual_transaction_id	text,
+		  transaction_id		bigint,
+		  error_severity		text,
+		  sql_state_code		text,
+		  message			text,
+		  detail			text,
+		  hint				text,
+		  internal_query		text,
+		  internal_query_pos		integer,
+		  context			text,
+		  query				text,
+		  query_pos			integer,
+		  location			text,
+		  application_name		text,
+		  backend_type			text,
+		  leader_pid			integer,
+		  query_id			bigint
+		) SERVER log_server
+		OPTIONS (filename '/rdsdbdata/log/error/badcsvformat.csv.gz')"
+PL/pgSQL function create_foreign_table_for_log_file(text,text,text) line 5 at EXECUTE
+SELECT * from badcsv_compressed; --ERROR
+ERROR:  relation "badcsv_compressed" does not exist
+LINE 1: SELECT * from badcsv_compressed;
+                      ^
+SELECT create_foreign_table_for_log_file('badgz_compressed', 'log_server', 'postgresql.log.bad.gzfile.gz');
+ERROR:  The log file path specified was invalid.
+HINT:  Use list_postgres_log_files() and create_foreign_table_for_log_file(table_name text, server_name text, log_file_name text) to easily create foreign data wrappers to Postgres log files
+CONTEXT:  SQL statement "CREATE FOREIGN TABLE badgz_compressed (
+		  log_entry text
+		) SERVER log_server
+		OPTIONS (filename '/rdsdbdata/log/error/postgresql.log.bad.gzfile.gz')"
+PL/pgSQL function create_foreign_table_for_log_file(text,text,text) line 36 at EXECUTE
+SELECT * from badgz_compressed; --ERROR
+ERROR:  relation "badgz_compressed" does not exist
+LINE 1: SELECT * from badgz_compressed;
+                      ^
+-- make sure log_fdw will generate apporiate error report when log file or a portion of the log file was created by a version of PostgreSQL that the installed version of log_fdw cannot read
+SELECT create_foreign_table_for_log_file('pglog_old', 'log_server', 'postgresql.log.old.csv');
+ERROR:  The log file path specified was invalid.
+HINT:  Use list_postgres_log_files() and create_foreign_table_for_log_file(table_name text, server_name text, log_file_name text) to easily create foreign data wrappers to Postgres log files
+CONTEXT:  SQL statement "CREATE FOREIGN TABLE pglog_old (
+		  log_time			timestamp(3) with time zone,
+		  user_name			text,
+		  database_name			text,
+		  process_id			integer,
+		  connection_from		text,
+		  session_id			text,
+		  session_line_num		bigint,
+		  command_tag			text,
+		  session_start_time		timestamp with time zone,
+		  virtual_transaction_id	text,
+		  transaction_id		bigint,
+		  error_severity		text,
+		  sql_state_code		text,
+		  message			text,
+		  detail			text,
+		  hint				text,
+		  internal_query		text,
+		  internal_query_pos		integer,
+		  context			text,
+		  query				text,
+		  query_pos			integer,
+		  location			text,
+		  application_name		text,
+		  backend_type			text,
+		  leader_pid			integer,
+		  query_id			bigint
+		) SERVER log_server
+		OPTIONS (filename '/rdsdbdata/log/error/postgresql.log.old.csv')"
+PL/pgSQL function create_foreign_table_for_log_file(text,text,text) line 5 at EXECUTE
+SELECT * from pglog_old;
+ERROR:  relation "pglog_old" does not exist
+LINE 1: SELECT * from pglog_old;
+                      ^
+SELECT create_foreign_table_for_log_file('pglog_mix', 'log_server', 'postgresql.log.mix.csv');
+ERROR:  The log file path specified was invalid.
+HINT:  Use list_postgres_log_files() and create_foreign_table_for_log_file(table_name text, server_name text, log_file_name text) to easily create foreign data wrappers to Postgres log files
+CONTEXT:  SQL statement "CREATE FOREIGN TABLE pglog_mix (
+		  log_time			timestamp(3) with time zone,
+		  user_name			text,
+		  database_name			text,
+		  process_id			integer,
+		  connection_from		text,
+		  session_id			text,
+		  session_line_num		bigint,
+		  command_tag			text,
+		  session_start_time		timestamp with time zone,
+		  virtual_transaction_id	text,
+		  transaction_id		bigint,
+		  error_severity		text,
+		  sql_state_code		text,
+		  message			text,
+		  detail			text,
+		  hint				text,
+		  internal_query		text,
+		  internal_query_pos		integer,
+		  context			text,
+		  query				text,
+		  query_pos			integer,
+		  location			text,
+		  application_name		text,
+		  backend_type			text,
+		  leader_pid			integer,
+		  query_id			bigint
+		) SERVER log_server
+		OPTIONS (filename '/rdsdbdata/log/error/postgresql.log.mix.csv')"
+PL/pgSQL function create_foreign_table_for_log_file(text,text,text) line 5 at EXECUTE
+SELECT * from pglog_mix;
+ERROR:  relation "pglog_mix" does not exist
+LINE 1: SELECT * from pglog_mix;
+                      ^
+-- non-rds_superusers can run create_foreign_table_for_log_file()
+GRANT EXECUTE ON FUNCTION create_foreign_table_for_log_file(text, text, text) TO no_priv_user;
+GRANT USAGE ON FOREIGN SERVER log_server TO no_priv_user;
+SET ROLE no_priv_user;
+SELECT create_foreign_table_for_log_file('priv_test', 'log_server', 'sonnet116.txt');
+ERROR:  The log file path specified was invalid.
+HINT:  Use list_postgres_log_files() and create_foreign_table_for_log_file(table_name text, server_name text, log_file_name text) to easily create foreign data wrappers to Postgres log files
+CONTEXT:  SQL statement "CREATE FOREIGN TABLE priv_test (
+		  log_entry text
+		) SERVER log_server
+		OPTIONS (filename '/rdsdbdata/log/error/sonnet116.txt')"
+PL/pgSQL function create_foreign_table_for_log_file(text,text,text) line 36 at EXECUTE
+RESET ROLE;
+-- file path is checked even without validator function
+ALTER FOREIGN DATA WRAPPER log_fdw NO VALIDATOR;
+CREATE FOREIGN TABLE validator1 (a INT) SERVER log_server OPTIONS (filename '/a/b/c');
+CREATE FOREIGN TABLE validator2 (a INT) SERVER log_server OPTIONS (filename 'alsdfkjalskdjfhlsdkjhasdflkjahsdflkjhasdflkjhasdlfkjahsdlfkjhasdlkfjhasdf');
+CREATE FOREIGN TABLE validator3 (a INT) SERVER log_server OPTIONS (filename '/rdsdbdata/log/error/../../../hax.csv');
+CREATE FOREIGN TABLE validator4 (a INT) SERVER log_server OPTIONS (filename '/rdsdbdata/log/error/postgresql.log.abcdef.csv');
+CREATE FOREIGN TABLE validator5 (a INT) SERVER log_server OPTIONS (filename '/rdsdbdata/log/error');
+CREATE FOREIGN TABLE validator6 (a INT) SERVER log_server OPTIONS (filename '/rdsdbdata/log/error/');
+CREATE FOREIGN TABLE validator7 (a INT) SERVER log_server OPTIONS (filename '/rdsdbdata/log/error/../../../somefile.txt');
+SELECT * FROM validator1;
+ERROR:  The log file path specified was invalid.
+HINT:  Use list_postgres_log_files() and create_foreign_table_for_log_file(table_name text, server_name text, log_file_name text) to easily create foreign data wrappers to Postgres log files
+SELECT * FROM validator2;
+ERROR:  The log file path specified was invalid.
+HINT:  Use list_postgres_log_files() and create_foreign_table_for_log_file(table_name text, server_name text, log_file_name text) to easily create foreign data wrappers to Postgres log files
+SELECT * FROM validator3;
+ERROR:  The log file path specified was invalid.
+HINT:  Use list_postgres_log_files() and create_foreign_table_for_log_file(table_name text, server_name text, log_file_name text) to easily create foreign data wrappers to Postgres log files
+SELECT * FROM validator4;
+ERROR:  could not open file "/rdsdbdata/log/error/postgresql.log.abcdef.csv" for reading: No such file or directory
+HINT:  COPY FROM instructs the PostgreSQL server process to read a file. You may want a client-side facility such as psql's \copy.
+SELECT * FROM validator5;
+ERROR:  The log file path specified was invalid.
+HINT:  Use list_postgres_log_files() and create_foreign_table_for_log_file(table_name text, server_name text, log_file_name text) to easily create foreign data wrappers to Postgres log files
+SELECT * FROM validator6;
+ERROR:  The log file path specified was invalid.
+HINT:  Use list_postgres_log_files() and create_foreign_table_for_log_file(table_name text, server_name text, log_file_name text) to easily create foreign data wrappers to Postgres log files
+SELECT * FROM validator7;
+ERROR:  The log file path specified was invalid.
+HINT:  Use list_postgres_log_files() and create_foreign_table_for_log_file(table_name text, server_name text, log_file_name text) to easily create foreign data wrappers to Postgres log files
+-- cleanup
+DROP EXTENSION log_fdw CASCADE;
+NOTICE:  drop cascades to 10 other objects
+DETAIL:  drop cascades to server log_server
+drop cascades to user mapping for log_fdw_superuser on server log_server
+drop cascades to user mapping for no_priv_user on server log_server
+drop cascades to foreign table validator1
+drop cascades to foreign table validator2
+drop cascades to foreign table validator3
+drop cascades to foreign table validator4
+drop cascades to foreign table validator5
+drop cascades to foreign table validator6
+drop cascades to foreign table validator7
+DROP ROLE log_fdw_superuser, log_fdw_user, no_priv_user;
