@@ -3,7 +3,7 @@
  * log_fdw.c
  *		  foreign-data wrapper for server-side flat files (or programs).
  *
- * Copyright (c) 2010-2021, PostgreSQL Global Development Group
+ * Copyright (c) 2022, PostgreSQL Global Development Group
  *
  * IDENTIFICATION
  *		  /log_fdw.c

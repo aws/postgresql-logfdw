@@ -10,7 +10,7 @@ PGFILEDESC = "log_fdw - foreign data wrapper for files"
 # approved for use on Amazon RDS as of this Postgres version. While we
 # still allow the extension to build, we remove the control
 # file before bundling the rpm, thus we shouldn't test against it.
-REGRESS =
+REGRESS = log_fdw
 
 EXTRA_CLEAN = sql/log_fdw.sql expected/log_fdw.out
 
