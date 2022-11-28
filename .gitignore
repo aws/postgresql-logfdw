@@ -1,2 +1,4 @@
+/file_fdw.sql
 *.o
 *.so
+
