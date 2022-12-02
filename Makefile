@@ -12,7 +12,7 @@ PGFILEDESC = "log_fdw - foreign data wrapper for files"
 # file before bundling the rpm, thus we shouldn't test against it.
 REGRESS = log_fdw
 
-EXTRA_CLEAN = sql/log_fdw.sql expected/log_fdw.out
+EXTRA_CLEAN = sql/log_fdw.sql
 
 PG_CONFIG = pg_config
 PGXS := $(shell $(PG_CONFIG) --pgxs)

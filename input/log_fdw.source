@@ -112,7 +112,7 @@ CREATE FOREIGN TABLE pglog_1 (
   leader_pid integer,
   query_id bigint
 ) SERVER log_server
-OPTIONS ( filename '/rdsdbdata/log/error/postgresql.log.2016-08-09-22.csv');
+OPTIONS ( filename 'postgresql-2022-12-02.csv');
 GRANT SELECT ON pglog_1 to log_fdw_user;
 ALTER FOREIGN TABLE pglog_1 ADD CHECK (process_id > 0);
 

@@ -309,17 +309,170 @@ log_fdw_handler(PG_FUNCTION_ARGS)
  *
  * Raise an ERROR if the option or its value is considered invalid.
  */
+
+ 
+// Datum
+// log_fdw_validator(PG_FUNCTION_ARGS)
+// {
+// 	List	   *options_list = untransformRelOptions(PG_GETARG_DATUM(0));
+// 	Oid			catalog = PG_GETARG_OID(1);
+// 	char	   *filename = NULL;
+// 	DefElem    *force_not_null = NULL;
+// 	DefElem    *force_null = NULL;
+// 	List	   *other_options = NIL;
+// 	ListCell   *cell;
+
+// 	/*
+// 	 * Check that only options supported by log_fdw, and allowed for the
+// 	 * current object type, are given.
+// 	 */
+// 	foreach(cell, options_list)
+// 	{
+// 		DefElem    *def = (DefElem *) lfirst(cell);
+
+// 		if (!is_valid_option(def->defname, catalog))
+// 		{
+// 			const struct FileFdwOption *opt;
+// 			StringInfoData buf;
+
+// 			/*
+// 			 * Unknown option specified, complain about it. Provide a hint
+// 			 * with list of valid options for the object.
+// 			 */
+// 			initStringInfo(&buf);
+// 			for (opt = valid_options; opt->optname; opt++)
+// 			{
+// 				if (catalog == opt->optcontext)
+// 					appendStringInfo(&buf, "%s%s", (buf.len > 0) ? ", " : "",
+// 									 opt->optname);
+// 			}
+
+// 			ereport(ERROR,
+// 					(errcode(ERRCODE_FDW_INVALID_OPTION_NAME),
+// 					 errmsg("invalid option \"%s\"", def->defname),
+// 					 buf.len > 0
+// 					 ? errhint("Valid options in this context are: %s",
+// 							   buf.data)
+// 					 : errhint("There are no valid options in this context.")));
+// 		}
+
+// 		/*
+// 		 * Separate out filename, program, and column-specific options, since
+// 		 * ProcessCopyOptions won't accept them.
+// 		 */
+// 		if (strcmp(def->defname, "filename") == 0 ||
+// 			strcmp(def->defname, "program") == 0)
+// 		{
+// 			if (filename)
+// 				ereport(ERROR,
+// 						(errcode(ERRCODE_SYNTAX_ERROR),
+// 						 errmsg("conflicting or redundant options")));
+
+// 			/*
+// 			 * Check permissions for changing which file or program is used by
+// 			 * the log_fdw.
+// 			 *
+// 			 * Only members of the role 'pg_read_server_files' are allowed to
+// 			 * set the 'filename' option of a log_fdw foreign table, while
+// 			 * only members of the role 'pg_execute_server_program' are
+// 			 * allowed to set the 'program' option.  This is because we don't
+// 			 * want regular users to be able to control which file gets read
+// 			 * or which program gets executed.
+// 			 *
+// 			 * Putting this sort of permissions check in a validator is a bit
+// 			 * of a crock, but there doesn't seem to be any other place that
+// 			 * can enforce the check more cleanly.
+// 			 *
+// 			 * Note that the valid_options[] array disallows setting filename
+// 			 * and program at any options level other than foreign table ---
+// 			 * otherwise there'd still be a security hole.
+// 			 */
+// 			if (strcmp(def->defname, "filename") == 0 &&
+// 				!is_member_of_role(GetUserId(), ROLE_PG_READ_SERVER_FILES))
+// 				ereport(ERROR,
+// 						(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+// 						 errmsg("only superuser or a member of the pg_read_server_files role may specify the filename option of a log_fdw foreign table")));
+
+// 			if (strcmp(def->defname, "program") == 0 &&
+// 				!is_member_of_role(GetUserId(), ROLE_PG_EXECUTE_SERVER_PROGRAM))
+// 				ereport(ERROR,
+// 						(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+// 						 errmsg("only superuser or a member of the pg_execute_server_program role may specify the program option of a log_fdw foreign table")));
+
+// 			filename = defGetString(def);
+// 		}
+
+// 		/*
+// 		 * force_not_null is a boolean option; after validation we can discard
+// 		 * it - it will be retrieved later in get_log_fdw_attribute_options()
+// 		 */
+// 		else if (strcmp(def->defname, "force_not_null") == 0)
+// 		{
+// 			if (force_not_null)
+// 				ereport(ERROR,
+// 						(errcode(ERRCODE_SYNTAX_ERROR),
+// 						 errmsg("conflicting or redundant options"),
+// 						 errhint("Option \"force_not_null\" supplied more than once for a column.")));
+// 			force_not_null = def;
+// 			/* Don't care what the value is, as long as it's a legal boolean */
+// 			(void) defGetBoolean(def);
+// 		}
+// 		/* See comments for force_not_null above */
+// 		else if (strcmp(def->defname, "force_null") == 0)
+// 		{
+// 			if (force_null)
+// 				ereport(ERROR,
+// 						(errcode(ERRCODE_SYNTAX_ERROR),
+// 						 errmsg("conflicting or redundant options"),
+// 						 errhint("Option \"force_null\" supplied more than once for a column.")));
+// 			force_null = def;
+// 			(void) defGetBoolean(def);
+// 		}
+// 		else
+// 			other_options = lappend(other_options, def);
+// 	}
+
+// 	/*
+// 	 * Now apply the core COPY code's validation logic for more checks.
+// 	 */
+// 	ProcessCopyOptions(NULL, NULL, true, other_options);
+
+// 	/*
+// 	 * Either filename or program option is required for log_fdw foreign
+// 	 * tables.
+// 	 */
+// 	if (catalog == ForeignTableRelationId && filename == NULL)
+// 		ereport(ERROR,
+// 				(errcode(ERRCODE_FDW_DYNAMIC_PARAMETER_VALUE_NEEDED),
+// 				 errmsg("either filename or program is required for log_fdw foreign tables")));
+
+// 	PG_RETURN_VOID();
+// } 
+
+
+
+
+
 Datum
 log_fdw_validator(PG_FUNCTION_ARGS)
 {
 	List	   *options_list = untransformRelOptions(PG_GETARG_DATUM(0));
 	Oid			catalog = PG_GETARG_OID(1);
 	char	   *filename = NULL;
-	DefElem    *force_not_null = NULL;
-	DefElem    *force_null = NULL;
-	List	   *other_options = NIL;
 	ListCell   *cell;
+	char       *log_file_dir;
+	   
 
+	log_file_dir = (char *) palloc(PATH_MAX);
+
+	if (strlen(Log_directory) > 0 && Log_directory[0] == '/')
+	{
+		strcpy(log_file_dir,Log_directory);
+	} 
+	else 
+	{
+		snprintf(log_file_dir, PATH_MAX,"%s/%s",DataDir, Log_directory);
+	}
 	/*
 	 * Check that only options supported by log_fdw, and allowed for the
 	 * current object type, are given.
@@ -351,101 +504,115 @@ log_fdw_validator(PG_FUNCTION_ARGS)
 					 buf.len > 0
 					 ? errhint("Valid options in this context are: %s",
 							   buf.data)
-					 : errhint("There are no valid options in this context.")));
+				  : errhint("There are no valid options in this context.")));
 		}
 
-		/*
-		 * Separate out filename, program, and column-specific options, since
-		 * ProcessCopyOptions won't accept them.
-		 */
-		if (strcmp(def->defname, "filename") == 0 ||
-			strcmp(def->defname, "program") == 0)
+		/* Separate out filename. */
+
+		if (strcmp(def->defname, "filename") == 0)
 		{
+			char *real_path;
+			bool fail = false;
+			bool fail1 = false;
+			bool fail2 = false;
+			bool fail3 = false;
+
+
+
 			if (filename)
 				ereport(ERROR,
 						(errcode(ERRCODE_SYNTAX_ERROR),
 						 errmsg("conflicting or redundant options")));
 
 			/*
-			 * Check permissions for changing which file or program is used by
-			 * the log_fdw.
+			 * Check that the file is in /rdsdbdata/log/error/.
 			 *
-			 * Only members of the role 'pg_read_server_files' are allowed to
-			 * set the 'filename' option of a log_fdw foreign table, while
-			 * only members of the role 'pg_execute_server_program' are
-			 * allowed to set the 'program' option.  This is because we don't
-			 * want regular users to be able to control which file gets read
-			 * or which program gets executed.
-			 *
-			 * Putting this sort of permissions check in a validator is a bit
-			 * of a crock, but there doesn't seem to be any other place that
-			 * can enforce the check more cleanly.
-			 *
-			 * Note that the valid_options[] array disallows setting filename
-			 * and program at any options level other than foreign table ---
-			 * otherwise there'd still be a security hole.
+			 * During pg_upgrade, we skip checking whether the file
+			 * actually exists because it may have already been
+			 * rotated away.  To guard against attack vectors from
+			 * other utilities that use binary upgrade mode (e.g.
+			 * pg_transport), we still check the file path as best
+			 * we can.
 			 */
-			if (strcmp(def->defname, "filename") == 0 &&
-				!is_member_of_role(GetUserId(), ROLE_PG_READ_SERVER_FILES))
-				ereport(ERROR,
-						(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-						 errmsg("only superuser or a member of the pg_read_server_files role may specify the filename option of a log_fdw foreign table")));
+			real_path = pstrdup(defGetString(def));
+			canonicalize_path(real_path);
 
-			if (strcmp(def->defname, "program") == 0 &&
-				!is_member_of_role(GetUserId(), ROLE_PG_EXECUTE_SERVER_PROGRAM))
-				ereport(ERROR,
-						(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-						 errmsg("only superuser or a member of the pg_execute_server_program role may specify the program option of a log_fdw foreign table")));
 
-			filename = defGetString(def);
-		}
+            fail1 = path_contains_parent_reference(real_path);
+			fail2 = !path_is_prefix_of_path(log_file_dir, real_path);
+			fail3 = strlen(log_file_dir) + 1 >= strlen(real_path); 
 
-		/*
-		 * force_not_null is a boolean option; after validation we can discard
-		 * it - it will be retrieved later in get_log_fdw_attribute_options()
-		 */
-		else if (strcmp(def->defname, "force_not_null") == 0)
-		{
-			if (force_not_null)
+
+			if (fail1)
 				ereport(ERROR,
 						(errcode(ERRCODE_SYNTAX_ERROR),
-						 errmsg("conflicting or redundant options"),
-						 errhint("Option \"force_not_null\" supplied more than once for a column.")));
-			force_not_null = def;
-			/* Don't care what the value is, as long as it's a legal boolean */
-			(void) defGetBoolean(def);
-		}
-		/* See comments for force_not_null above */
-		else if (strcmp(def->defname, "force_null") == 0)
-		{
-			if (force_null)
+						 errmsg("fail 1"),
+						 errhint("Use list_postgres_log_files() and "
+								"create_foreign_table_for_log_file(table_name text, "
+								"server_name text, log_file_name text) to easily "
+								"create foreign data wrappers to Postgres log files")));
+
+			if (fail2)
 				ereport(ERROR,
 						(errcode(ERRCODE_SYNTAX_ERROR),
-						 errmsg("conflicting or redundant options"),
-						 errhint("Option \"force_null\" supplied more than once for a column.")));
-			force_null = def;
-			(void) defGetBoolean(def);
+						 errmsg("fail 2"),
+						 errhint("Use list_postgres_log_files() and "
+								"create_foreign_table_for_log_file(table_name text, "
+								"server_name text, log_file_name text) to easily "
+								"create foreign data wrappers to Postgres log files")));
+
+			if (fail3)
+				ereport(ERROR,
+						(errcode(ERRCODE_SYNTAX_ERROR),
+						 errmsg("fail 3"),
+						 errhint("Use list_postgres_log_files() and "
+								"create_foreign_table_for_log_file(table_name text, "
+								"server_name text, log_file_name text) to easily "
+								"create foreign data wrappers to Postgres log files")));
+
+			fail = path_contains_parent_reference(real_path);
+			fail |= !path_is_prefix_of_path(log_file_dir, real_path);
+			fail |= strlen(log_file_dir) + 1 >= strlen(real_path);
+
+			if (!IsBinaryUpgrade)
+			{
+				pfree(real_path);
+				real_path = (char *) palloc(PATH_MAX);
+				fail |= (realpath(defGetString(def), real_path) == NULL);
+			}
+
+
+
+
+
+			if (fail)
+				ereport(ERROR,
+						(errcode(ERRCODE_SYNTAX_ERROR),
+						 errmsg("The log file path specified was invalid."),
+						 errhint("Use list_postgres_log_files() and "
+								"create_foreign_table_for_log_file(table_name text, "
+								"server_name text, log_file_name text) to easily "
+								"create foreign data wrappers to Postgres log files")));
+
+			filename = real_path;
 		}
-		else
-			other_options = lappend(other_options, def);
 	}
 
-	/*
-	 * Now apply the core COPY code's validation logic for more checks.
-	 */
-	ProcessCopyOptions(NULL, NULL, true, other_options);
 
 	/*
-	 * Either filename or program option is required for log_fdw foreign
-	 * tables.
+	 * Filename option is required for log_fdw foreign tables.
 	 */
 	if (catalog == ForeignTableRelationId && filename == NULL)
 		ereport(ERROR,
 				(errcode(ERRCODE_FDW_DYNAMIC_PARAMETER_VALUE_NEEDED),
-				 errmsg("either filename or program is required for log_fdw foreign tables")));
+				 errmsg("filename is required for log_fdw foreign tables")));
 
 	PG_RETURN_VOID();
 }
+
+
+
+
 
 /*
  * Check if the provided option is one of the valid options.
@@ -481,6 +648,9 @@ fileGetOptions(Oid foreigntableid,
 	ListCell   *lc;
 	char       *path;
 	char       *log_file_dir;
+	bool fail1 = false;
+	bool fail2 = false;
+	bool fail3 = false;
 
 	/*
 	 * Extract options from FDW objects.  We ignore user mappings because
@@ -533,7 +703,7 @@ fileGetOptions(Oid foreigntableid,
 		elog(ERROR, "either filename or program is required for log_fdw foreign tables");
     /*
 	 * The validator should have also checked that the file is in
-	 * /rdsdbdata/log/error, but check again, just in case.
+	 * guc variable log directory, but check again, just in case.
 	 */
 	path = pstrdup(*filename);
 	//log_file_dir = pstrdup(*filename);
@@ -547,6 +717,39 @@ fileGetOptions(Oid foreigntableid,
 	{
 		snprintf(log_file_dir, PATH_MAX,"%s/%s",DataDir, Log_directory);
 	}
+
+
+	            fail1 = path_contains_parent_reference(real_path);
+			fail2 = !path_is_prefix_of_path(log_file_dir, real_path);
+			fail3 = strlen(log_file_dir) + 1 >= strlen(real_path); 
+
+
+			if (fail1)
+				ereport(ERROR,
+						(errcode(ERRCODE_SYNTAX_ERROR),
+						 errmsg("fail 11"),
+						 errhint("Use list_postgres_log_files() and "
+								"create_foreign_table_for_log_file(table_name text, "
+								"server_name text, log_file_name text) to easily "
+								"create foreign data wrappers to Postgres log files")));
+
+			if (fail2)
+				ereport(ERROR,
+						(errcode(ERRCODE_SYNTAX_ERROR),
+						 errmsg("fail 22"),
+						 errhint("Use list_postgres_log_files() and "
+								"create_foreign_table_for_log_file(table_name text, "
+								"server_name text, log_file_name text) to easily "
+								"create foreign data wrappers to Postgres log files")));
+
+			if (fail3)
+				ereport(ERROR,
+						(errcode(ERRCODE_SYNTAX_ERROR),
+						 errmsg("fail 33"),
+						 errhint("Use list_postgres_log_files() and "
+								"create_foreign_table_for_log_file(table_name text, "
+								"server_name text, log_file_name text) to easily "
+								"create foreign data wrappers to Postgres log files")));
 
 	canonicalize_path(path);
 	if (path_contains_parent_reference(path) ||

@@ -1,452 +1,900 @@
 --
--- Test foreign-data wrapper file_fdw.
+-- Test foreign-data wrapper log_fdw.
 --
 -- Clean up in case a prior regression run failed
-SET client_min_messages TO 'warning';
-DROP ROLE IF EXISTS regress_file_fdw_superuser, regress_file_fdw_user, regress_no_priv_user;
+SET client_min_messages TO 'error';
+DROP ROLE IF EXISTS log_fdw_superuser, log_fdw_user, no_priv_user, "rds_superuser";
 RESET client_min_messages;
-CREATE ROLE regress_file_fdw_superuser LOGIN SUPERUSER; -- is a superuser
-CREATE ROLE regress_file_fdw_user LOGIN;                -- has priv and user mapping
-CREATE ROLE regress_no_priv_user LOGIN;                 -- has priv but no user mapping
--- Install file_fdw
-CREATE EXTENSION file_fdw;
--- regress_file_fdw_superuser owns fdw-related objects
-SET ROLE regress_file_fdw_superuser;
-CREATE SERVER file_server FOREIGN DATA WRAPPER file_fdw;
+CREATE ROLE log_fdw_superuser LOGIN SUPERUSER; -- is a superuser
+CREATE ROLE log_fdw_user LOGIN;                -- has priv and user mapping
+CREATE ROLE no_priv_user LOGIN;                 -- has priv but no user mapping
+CREATE ROLE "rds_superuser" nosuperuser nologin nocreaterole inherit noreplication;
+DROP extension if exists log_fdw;
+NOTICE:  extension "log_fdw" does not exist, skipping
+-- Install log_fdw
+CREATE EXTENSION log_fdw;
+-- log_fdw_superuser owns fdw-related objects
+SET ROLE log_fdw_superuser;
+CREATE SERVER log_server FOREIGN DATA WRAPPER log_fdw;
 -- privilege tests
-SET ROLE regress_file_fdw_user;
-CREATE FOREIGN DATA WRAPPER file_fdw2 HANDLER file_fdw_handler VALIDATOR file_fdw_validator;   -- ERROR
-ERROR:  permission denied to create foreign-data wrapper "file_fdw2"
+SET ROLE log_fdw_user;
+CREATE FOREIGN DATA WRAPPER log_fdw2 HANDLER log_fdw_handler VALIDATOR log_fdw_validator;   -- ERROR
+ERROR:  permission denied to create foreign-data wrapper "log_fdw2"
 HINT:  Must be superuser to create a foreign-data wrapper.
-CREATE SERVER file_server2 FOREIGN DATA WRAPPER file_fdw;   -- ERROR
-ERROR:  permission denied for foreign-data wrapper file_fdw
-CREATE USER MAPPING FOR regress_file_fdw_user SERVER file_server;   -- ERROR
-ERROR:  permission denied for foreign server file_server
-SET ROLE regress_file_fdw_superuser;
-GRANT USAGE ON FOREIGN SERVER file_server TO regress_file_fdw_user;
-SET ROLE regress_file_fdw_user;
-CREATE USER MAPPING FOR regress_file_fdw_user SERVER file_server;
+CREATE SERVER log_server2 FOREIGN DATA WRAPPER log_fdw;   -- ERROR
+ERROR:  permission denied for foreign-data wrapper log_fdw
+CREATE USER MAPPING FOR log_fdw_user SERVER log_server;   -- ERROR
+ERROR:  permission denied for foreign server log_server
+SET ROLE log_fdw_superuser;
+GRANT USAGE ON FOREIGN SERVER log_server TO log_fdw_user;
+SET ROLE log_fdw_user;
+CREATE USER MAPPING FOR log_fdw_user SERVER log_server;
 -- create user mappings and grant privilege to test users
-SET ROLE regress_file_fdw_superuser;
-CREATE USER MAPPING FOR regress_file_fdw_superuser SERVER file_server;
-CREATE USER MAPPING FOR regress_no_priv_user SERVER file_server;
+SET ROLE log_fdw_superuser;
+CREATE USER MAPPING FOR log_fdw_superuser SERVER log_server;
+CREATE USER MAPPING FOR no_priv_user SERVER log_server;
 -- validator tests
-CREATE FOREIGN TABLE tbl () SERVER file_server OPTIONS (format 'xml');  -- ERROR
-ERROR:  COPY format "xml" not recognized
-CREATE FOREIGN TABLE tbl () SERVER file_server OPTIONS (format 'text', header 'true');      -- ERROR
-ERROR:  COPY HEADER available only in CSV mode
-CREATE FOREIGN TABLE tbl () SERVER file_server OPTIONS (format 'text', quote ':');          -- ERROR
-ERROR:  COPY quote available only in CSV mode
-CREATE FOREIGN TABLE tbl () SERVER file_server OPTIONS (format 'text', escape ':');         -- ERROR
-ERROR:  COPY escape available only in CSV mode
-CREATE FOREIGN TABLE tbl () SERVER file_server OPTIONS (format 'binary', header 'true');    -- ERROR
-ERROR:  COPY HEADER available only in CSV mode
-CREATE FOREIGN TABLE tbl () SERVER file_server OPTIONS (format 'binary', quote ':');        -- ERROR
-ERROR:  COPY quote available only in CSV mode
-CREATE FOREIGN TABLE tbl () SERVER file_server OPTIONS (format 'binary', escape ':');       -- ERROR
-ERROR:  COPY escape available only in CSV mode
-CREATE FOREIGN TABLE tbl () SERVER file_server OPTIONS (format 'text', delimiter 'a');      -- ERROR
-ERROR:  COPY delimiter cannot be "a"
-CREATE FOREIGN TABLE tbl () SERVER file_server OPTIONS (format 'text', escape '-');         -- ERROR
-ERROR:  COPY escape available only in CSV mode
-CREATE FOREIGN TABLE tbl () SERVER file_server OPTIONS (format 'csv', quote '-', null '=-=');   -- ERROR
-ERROR:  CSV quote character must not appear in the NULL specification
-CREATE FOREIGN TABLE tbl () SERVER file_server OPTIONS (format 'csv', delimiter '-', null '=-=');    -- ERROR
-ERROR:  COPY delimiter must not appear in the NULL specification
-CREATE FOREIGN TABLE tbl () SERVER file_server OPTIONS (format 'csv', delimiter '-', quote '-');    -- ERROR
-ERROR:  COPY delimiter and quote must be different
-CREATE FOREIGN TABLE tbl () SERVER file_server OPTIONS (format 'csv', delimiter '---');     -- ERROR
-ERROR:  COPY delimiter must be a single one-byte character
-CREATE FOREIGN TABLE tbl () SERVER file_server OPTIONS (format 'csv', quote '---');         -- ERROR
-ERROR:  COPY quote must be a single one-byte character
-CREATE FOREIGN TABLE tbl () SERVER file_server OPTIONS (format 'csv', escape '---');        -- ERROR
-ERROR:  COPY escape must be a single one-byte character
-CREATE FOREIGN TABLE tbl () SERVER file_server OPTIONS (format 'text', delimiter '\');       -- ERROR
-ERROR:  COPY delimiter cannot be "\"
-CREATE FOREIGN TABLE tbl () SERVER file_server OPTIONS (format 'text', delimiter '.');       -- ERROR
-ERROR:  COPY delimiter cannot be "."
-CREATE FOREIGN TABLE tbl () SERVER file_server OPTIONS (format 'text', delimiter '1');       -- ERROR
-ERROR:  COPY delimiter cannot be "1"
-CREATE FOREIGN TABLE tbl () SERVER file_server OPTIONS (format 'text', delimiter 'a');       -- ERROR
-ERROR:  COPY delimiter cannot be "a"
-CREATE FOREIGN TABLE tbl () SERVER file_server OPTIONS (format 'csv', delimiter '
+CREATE FOREIGN TABLE tbl () SERVER log_server OPTIONS (format 'xml');  -- ERROR
+ERROR:  invalid option "format"
+HINT:  Valid options in this context are: filename
+CREATE FOREIGN TABLE tbl () SERVER log_server OPTIONS (format 'text', header 'true');      -- ERROR
+ERROR:  invalid option "format"
+HINT:  Valid options in this context are: filename
+CREATE FOREIGN TABLE tbl () SERVER log_server OPTIONS (format 'text', quote ':');          -- ERROR
+ERROR:  invalid option "format"
+HINT:  Valid options in this context are: filename
+CREATE FOREIGN TABLE tbl () SERVER log_server OPTIONS (format 'text', escape ':');         -- ERROR
+ERROR:  invalid option "format"
+HINT:  Valid options in this context are: filename
+CREATE FOREIGN TABLE tbl () SERVER log_server OPTIONS (format 'binary', header 'true');    -- ERROR
+ERROR:  invalid option "format"
+HINT:  Valid options in this context are: filename
+CREATE FOREIGN TABLE tbl () SERVER log_server OPTIONS (format 'binary', quote ':');        -- ERROR
+ERROR:  invalid option "format"
+HINT:  Valid options in this context are: filename
+CREATE FOREIGN TABLE tbl () SERVER log_server OPTIONS (format 'binary', escape ':');       -- ERROR
+ERROR:  invalid option "format"
+HINT:  Valid options in this context are: filename
+CREATE FOREIGN TABLE tbl () SERVER log_server OPTIONS (format 'text', delimiter 'a');      -- ERROR
+ERROR:  invalid option "format"
+HINT:  Valid options in this context are: filename
+CREATE FOREIGN TABLE tbl () SERVER log_server OPTIONS (format 'text', escape '-');         -- ERROR
+ERROR:  invalid option "format"
+HINT:  Valid options in this context are: filename
+CREATE FOREIGN TABLE tbl () SERVER log_server OPTIONS (format 'csv', quote '-', null '=-=');   -- ERROR
+ERROR:  invalid option "format"
+HINT:  Valid options in this context are: filename
+CREATE FOREIGN TABLE tbl () SERVER log_server OPTIONS (format 'csv', delimiter '-', null '=-=');    -- ERROR
+ERROR:  invalid option "format"
+HINT:  Valid options in this context are: filename
+CREATE FOREIGN TABLE tbl () SERVER log_server OPTIONS (format 'csv', delimiter '-', quote '-');    -- ERROR
+ERROR:  invalid option "format"
+HINT:  Valid options in this context are: filename
+CREATE FOREIGN TABLE tbl () SERVER log_server OPTIONS (format 'csv', delimiter '---');     -- ERROR
+ERROR:  invalid option "format"
+HINT:  Valid options in this context are: filename
+CREATE FOREIGN TABLE tbl () SERVER log_server OPTIONS (format 'csv', quote '---');         -- ERROR
+ERROR:  invalid option "format"
+HINT:  Valid options in this context are: filename
+CREATE FOREIGN TABLE tbl () SERVER log_server OPTIONS (format 'csv', escape '---');        -- ERROR
+ERROR:  invalid option "format"
+HINT:  Valid options in this context are: filename
+CREATE FOREIGN TABLE tbl () SERVER log_server OPTIONS (format 'text', delimiter '\');       -- ERROR
+ERROR:  invalid option "format"
+HINT:  Valid options in this context are: filename
+CREATE FOREIGN TABLE tbl () SERVER log_server OPTIONS (format 'text', delimiter '.');       -- ERROR
+ERROR:  invalid option "format"
+HINT:  Valid options in this context are: filename
+CREATE FOREIGN TABLE tbl () SERVER log_server OPTIONS (format 'text', delimiter '1');       -- ERROR
+ERROR:  invalid option "format"
+HINT:  Valid options in this context are: filename
+CREATE FOREIGN TABLE tbl () SERVER log_server OPTIONS (format 'text', delimiter 'a');       -- ERROR
+ERROR:  invalid option "format"
+HINT:  Valid options in this context are: filename
+CREATE FOREIGN TABLE tbl () SERVER log_server OPTIONS (format 'csv', delimiter '
 ');       -- ERROR
-ERROR:  COPY delimiter cannot be newline or carriage return
-CREATE FOREIGN TABLE tbl () SERVER file_server OPTIONS (format 'csv', null '
+ERROR:  invalid option "format"
+HINT:  Valid options in this context are: filename
+CREATE FOREIGN TABLE tbl () SERVER log_server OPTIONS (format 'csv', null '
 ');       -- ERROR
-ERROR:  COPY null representation cannot use newline or carriage return
-CREATE FOREIGN TABLE tbl () SERVER file_server;  -- ERROR
-ERROR:  either filename or program is required for file_fdw foreign tables
+ERROR:  invalid option "format"
+HINT:  Valid options in this context are: filename
+CREATE FOREIGN TABLE tbl () SERVER log_server;  -- ERROR
+ERROR:  filename is required for log_fdw foreign tables
+-- file path validation tests
 CREATE FOREIGN TABLE agg_text (
 	a	int2 CHECK (a >= 0),
 	b	float4
-) SERVER file_server
-OPTIONS (format 'text', filename '/workplace/kadamnn/postgresql-logfdw/data/agg.data', delimiter '	', null '\N');
-GRANT SELECT ON agg_text TO regress_file_fdw_user;
-CREATE FOREIGN TABLE agg_csv (
-	a	int2,
-	b	float4
-) SERVER file_server
-OPTIONS (format 'csv', filename '/workplace/kadamnn/postgresql-logfdw/data/agg.csv', header 'true', delimiter ';', quote '@', escape '"', null '');
-ALTER FOREIGN TABLE agg_csv ADD CHECK (a >= 0);
-CREATE FOREIGN TABLE agg_bad (
-	a	int2,
-	b	float4
-) SERVER file_server
-OPTIONS (format 'csv', filename '/workplace/kadamnn/postgresql-logfdw/data/agg.bad', header 'true', delimiter ';', quote '@', escape '"', null '');
-ALTER FOREIGN TABLE agg_bad ADD CHECK (a >= 0);
--- per-column options tests
-CREATE FOREIGN TABLE text_csv (
-    word1 text OPTIONS (force_not_null 'true'),
-    word2 text OPTIONS (force_not_null 'off'),
-    word3 text OPTIONS (force_null 'true'),
-    word4 text OPTIONS (force_null 'off')
-) SERVER file_server
-OPTIONS (format 'text', filename '/workplace/kadamnn/postgresql-logfdw/data/text.csv', null 'NULL');
-SELECT * FROM text_csv; -- ERROR
-ERROR:  COPY force not null available only in CSV mode
-ALTER FOREIGN TABLE text_csv OPTIONS (SET format 'csv');
-\pset null _null_
-SELECT * FROM text_csv;
- word1 | word2  | word3  | word4  
--------+--------+--------+--------
- AAA   | aaa    | 123    | 
- XYZ   | xyz    |        | 321
- NULL  | _null_ | _null_ | _null_
- NULL  | _null_ | _null_ | _null_
- ABC   | abc    |        | 
-(5 rows)
-
--- force_not_null and force_null can be used together on the same column
-ALTER FOREIGN TABLE text_csv ALTER COLUMN word1 OPTIONS (force_null 'true');
-ALTER FOREIGN TABLE text_csv ALTER COLUMN word3 OPTIONS (force_not_null 'true');
--- force_not_null is not allowed to be specified at any foreign object level:
-ALTER FOREIGN DATA WRAPPER file_fdw OPTIONS (ADD force_not_null '*'); -- ERROR
-ERROR:  invalid option "force_not_null"
-HINT:  There are no valid options in this context.
-ALTER SERVER file_server OPTIONS (ADD force_not_null '*'); -- ERROR
-ERROR:  invalid option "force_not_null"
-HINT:  There are no valid options in this context.
-CREATE USER MAPPING FOR public SERVER file_server OPTIONS (force_not_null '*'); -- ERROR
-ERROR:  invalid option "force_not_null"
-HINT:  There are no valid options in this context.
-CREATE FOREIGN TABLE tbl () SERVER file_server OPTIONS (force_not_null '*'); -- ERROR
-ERROR:  invalid option "force_not_null"
-HINT:  Valid options in this context are: filename, program, format, header, delimiter, quote, escape, null, encoding
--- force_null is not allowed to be specified at any foreign object level:
-ALTER FOREIGN DATA WRAPPER file_fdw OPTIONS (ADD force_null '*'); -- ERROR
-ERROR:  invalid option "force_null"
-HINT:  There are no valid options in this context.
-ALTER SERVER file_server OPTIONS (ADD force_null '*'); -- ERROR
-ERROR:  invalid option "force_null"
-HINT:  There are no valid options in this context.
-CREATE USER MAPPING FOR public SERVER file_server OPTIONS (force_null '*'); -- ERROR
-ERROR:  invalid option "force_null"
-HINT:  There are no valid options in this context.
-CREATE FOREIGN TABLE tbl () SERVER file_server OPTIONS (force_null '*'); -- ERROR
-ERROR:  invalid option "force_null"
-HINT:  Valid options in this context are: filename, program, format, header, delimiter, quote, escape, null, encoding
+) SERVER log_server
+OPTIONS (filename 'a');
+ERROR:  The log file path specified was invalid.
+HINT:  Use list_postgres_log_files() and create_foreign_table_for_log_file(table_name text, server_name text, log_file_name text) to easily create foreign data wrappers to Postgres log files
+CREATE FOREIGN TABLE agg_text (
+        a       int2 CHECK (a >= 0),
+        b       float4
+) SERVER log_server
+OPTIONS (filename 'alsdfkjalskdjfhlsdkjhasdflkjahsdflkjhasdflkjhasdlfkjahsdlfkjhasdlkfjhasdf');
+ERROR:  The log file path specified was invalid.
+HINT:  Use list_postgres_log_files() and create_foreign_table_for_log_file(table_name text, server_name text, log_file_name text) to easily create foreign data wrappers to Postgres log files
+CREATE FOREIGN TABLE agg_text (
+        a       int2 CHECK (a >= 0),
+        b       float4
+) SERVER log_server
+OPTIONS (filename '/rdsdbdata/log/error/../../../hax.csv');
+ERROR:  The log file path specified was invalid.
+HINT:  Use list_postgres_log_files() and create_foreign_table_for_log_file(table_name text, server_name text, log_file_name text) to easily create foreign data wrappers to Postgres log files
+CREATE FOREIGN TABLE agg_text (
+        a       int2 CHECK (a >= 0),
+        b       float4
+) SERVER log_server
+OPTIONS (filename '/rdsdbdata/log/error/postgresql.log.abcdef.csv');
+ERROR:  The log file path specified was invalid.
+HINT:  Use list_postgres_log_files() and create_foreign_table_for_log_file(table_name text, server_name text, log_file_name text) to easily create foreign data wrappers to Postgres log files
+CREATE FOREIGN TABLE pglog_1 (
+  log_time timestamp(3) with time zone,
+  user_name text,
+  database_name text,
+  process_id integer,
+  connection_from text,
+  session_id text,
+  session_line_num bigint,
+  command_tag text,
+  session_start_time timestamp with time zone,
+  virtual_transaction_id text,
+  transaction_id bigint,
+  error_severity text,
+  sql_state_code text,
+  message text,
+  detail text,
+  hint text,
+  internal_query text,
+  internal_query_pos integer,
+  context text,
+  query text,
+  query_pos integer,
+  location text,
+  application_name text,
+  backend_type text,
+  leader_pid integer,
+  query_id bigint
+) SERVER log_server
+OPTIONS ( filename '/rdsdbdata/log/error/postgresql.log.2016-08-09-22.csv');
+GRANT SELECT ON pglog_1 to log_fdw_user;
+ALTER FOREIGN TABLE pglog_1 ADD CHECK (process_id > 0);
+CREATE FOREIGN TABLE pglog_2 (
+  log_time timestamp(3) with time zone,
+  user_name text,
+  database_name text,
+  process_id integer,
+  connection_from text,
+  session_id text,
+  session_line_num bigint,
+  command_tag text,
+  session_start_time timestamp with time zone,
+  virtual_transaction_id text,
+  transaction_id bigint,
+  error_severity text,
+  sql_state_code text,
+  message text,
+  detail text,
+  hint text,
+  internal_query text,
+  internal_query_pos integer,
+  context text,
+  query text,
+  query_pos integer,
+  location text,
+  application_name text,
+  backend_type text,
+  leader_pid integer,
+  query_id bigint
+) SERVER log_server
+OPTIONS ( filename '/rdsdbdata/log/error/postgresql.log.2016-08-09-23.csv');
+ALTER FOREIGN TABLE pglog_2 ADD CHECK (process_id > 0);
+CREATE FOREIGN TABLE pglog_3 (
+  log_time timestamp(3) with time zone,
+  user_name text,
+  database_name text,
+  process_id integer,
+  connection_from text,
+  session_id text,
+  session_line_num bigint,
+  command_tag text,
+  session_start_time timestamp with time zone,
+  virtual_transaction_id text,
+  transaction_id bigint,
+  error_severity text,
+  sql_state_code text,
+  message text,
+  detail text,
+  hint text,
+  internal_query text,
+  internal_query_pos integer,
+  context text,
+  query text,
+  query_pos integer,
+  location text,
+  application_name text,
+  backend_type text,
+  leader_pid integer,
+  query_id bigint
+) SERVER log_server
+OPTIONS ( filename '/rdsdbdata/log/error/postgresql.log.2016-08-10-00.csv');
+ALTER FOREIGN TABLE pglog_3 ADD CHECK (process_id > 0);
+CREATE FOREIGN TABLE pglog_bad (
+  user_name text,
+  database_name text,
+  process_id integer,
+  connection_from text,
+  session_id text,
+  session_line_num bigint,
+  command_tag text,
+  session_start_time timestamp with time zone,
+  virtual_transaction_id text,
+  transaction_id bigint,
+  error_severity text,
+  sql_state_code text,
+  message text,
+  detail text,
+  hint text,
+  internal_query text,
+  internal_query_pos integer,
+  context text,
+  query text
+) SERVER log_server
+OPTIONS ( filename '/rdsdbdata/log/error/postgresql.log.2016-08-10-01.csv');
 -- basic query tests
-SELECT * FROM agg_text WHERE b > 10.0 ORDER BY a;
-  a  |   b    
------+--------
-  42 | 324.78
- 100 | 99.097
+SELECT log_time, process_id, error_severity, message FROM pglog_1 where error_severity = 'LOG';
+             log_time             | process_id | error_severity |                                  message                                  
+----------------------------------+------------+----------------+---------------------------------------------------------------------------
+ Tue Aug 09 15:45:18.172 2016 PDT |       9876 | LOG            | ending log output to stderr
+ Tue Aug 09 15:45:18.175 2016 PDT |       9878 | LOG            | database system was interrupted; last known up at 2016-08-09 22:43:34 UTC
 (2 rows)
 
-SELECT * FROM agg_csv ORDER BY a;
-  a  |    b    
------+---------
-   0 | 0.09561
-  42 |  324.78
- 100 |  99.097
-(3 rows)
+SELECT log_time, process_id, error_severity, message FROM pglog_2 ORDER BY log_time DESC;
+             log_time             | process_id | error_severity |                                                                                                                message                                                                                                                
+----------------------------------+------------+----------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Tue Aug 09 15:45:18.251 2016 PDT |       9878 | DEBUG          | MultiXactId wrap limit is 2147483648, limited by database with OID 1
+ Tue Aug 09 15:45:18.251 2016 PDT |       9878 | LOG            | MultiXact member wraparound protections are now enabled
+ Tue Aug 09 15:45:18.251 2016 PDT |       9878 | DEBUG          | MultiXact member stop limit is now 4294914944 based on MultiXact 1
+ Tue Aug 09 15:45:18.25 2016 PDT  |       9878 | LOG            | checkpoint complete: wrote 0 buffers (0.0%); 0 transaction log file(s) added, 0 removed, 0 recycled; write=0.005 s, sync=0.000 s, total=0.017 s; sync files=0, longest=0.000 s, average=0.000 s; distance=16383 kB, estimate=16383 kB
+ Tue Aug 09 15:45:18.249 2016 PDT |       9878 | DEBUG          | attempting to remove WAL segments older than log file 000000000000000000000000
+ Tue Aug 09 15:45:18.235 2016 PDT |       9878 | DEBUG          | performing replication slot checkpoint
+(6 rows)
 
-SELECT * FROM agg_csv c JOIN agg_text t ON (t.a = c.a) ORDER BY c.a;
-  a  |    b    |  a  |    b    
------+---------+-----+---------
-   0 | 0.09561 |   0 | 0.09561
-  42 |  324.78 |  42 |  324.78
- 100 |  99.097 | 100 |  99.097
-(3 rows)
+SELECT log_time, process_id, error_severity, message FROM pglog_3 where log_time = 'Tue Aug 09 15:45:20.066 2016 PDT';
+             log_time             | process_id | error_severity |                message                
+----------------------------------+------------+----------------+---------------------------------------
+ Tue Aug 09 15:45:20.066 2016 PDT |       9892 | DEBUG          | postgres child[9892]: starting with (
+ Tue Aug 09 15:45:20.066 2016 PDT |       9892 | DEBUG          |         postgres
+ Tue Aug 09 15:45:20.066 2016 PDT |       9892 | DEBUG          | )
+ Tue Aug 09 15:45:20.066 2016 PDT |       9892 | DEBUG          | InitPostgres
+(4 rows)
 
 -- error context report tests
-SELECT * FROM agg_bad;               -- ERROR
-ERROR:  invalid input syntax for type real: "aaa"
-CONTEXT:  COPY agg_bad, line 3, column b: "aaa"
+SELECT * FROM pglog_bad;               -- ERROR
+ERROR:  extra data after last expected column
+HINT:  This could mean that the log file or a portion of the log file was created by a version of PostgreSQL that the installed version of log_fdw cannot read. It may be possible to read the file after running the command 'ALTER EXTENSION log_fdw UPDATE' and recreating the foreign table.
+CONTEXT:  COPY pglog_bad, line 1: "2016-08-09 22:46:18.416 UTC,,,10114,,57aa5d3a.2782,3,,2016-08-09 22:46:18 UTC,3/3,0,DEBUG,00000,"Sta..."
 -- misc query tests
 \t on
-EXPLAIN (VERBOSE, COSTS FALSE) SELECT * FROM agg_csv;
- Foreign Scan on public.agg_csv
-   Output: a, b
-   Foreign File: /workplace/kadamnn/postgresql-logfdw/data/agg.csv
+EXPLAIN (VERBOSE, COSTS FALSE) SELECT * FROM pglog_1;
+ Foreign Scan on public.pglog_1
+   Output: log_time, user_name, database_name, process_id, connection_from, session_id, session_line_num, command_tag, session_start_time, virtual_transaction_id, transaction_id, error_severity, sql_state_code, message, detail, hint, internal_query, internal_query_pos, context, query, query_pos, location, application_name, backend_type, leader_pid, query_id
+   Foreign File: /rdsdbdata/log/error/postgresql.log.2016-08-09-22.csv
 
 \t off
-PREPARE st(int) AS SELECT * FROM agg_csv WHERE a = $1;
-EXECUTE st(100);
-  a  |   b    
------+--------
- 100 | 99.097
-(1 row)
+PREPARE st(text) AS SELECT * FROM pglog_1 WHERE error_severity = $1;
+EXECUTE st('DEBUG');
+             log_time             | user_name | database_name | process_id | connection_from |  session_id   | session_line_num | command_tag |      session_start_time      | virtual_transaction_id | transaction_id | error_severity | sql_state_code |                       message                       | detail | hint | internal_query | internal_query_pos | context | query | query_pos | location | application_name | backend_type | leader_pid | query_id 
+----------------------------------+-----------+---------------+------------+-----------------+---------------+------------------+-------------+------------------------------+------------------------+----------------+----------------+----------------+-----------------------------------------------------+--------+------+----------------+--------------------+---------+-------+-----------+----------+------------------+--------------+------------+----------
+ Tue Aug 09 15:45:18.223 2016 PDT |           |               |       9878 |                 | 57aa5cfe.2696 |                2 |             | Tue Aug 09 15:45:18 2016 PDT |                        |              0 | DEBUG          | 00000          | checkpoint record is at 0/90002E0                   |        |      |                |                    |         |       |           |          |                  | startup      |            |        0
+ Tue Aug 09 15:45:18.223 2016 PDT |           |               |       9878 |                 | 57aa5cfe.2696 |                3 |             | Tue Aug 09 15:45:18 2016 PDT |                        |              0 | DEBUG          | 00000          | redo record is at 0/90002A8; shutdown FALSE         |        |      |                |                    |         |       |           |          |                  | startup      |            |        0
+ Tue Aug 09 15:45:18.223 2016 PDT |           |               |       9878 |                 | 57aa5cfe.2696 |                4 |             | Tue Aug 09 15:45:18 2016 PDT |                        |              0 | DEBUG          | 00000          | next transaction ID: 0/1879; next OID: 24578        |        |      |                |                    |         |       |           |          |                  | startup      |            |        0
+ Tue Aug 09 15:45:18.223 2016 PDT |           |               |       9878 |                 | 57aa5cfe.2696 |                5 |             | Tue Aug 09 15:45:18 2016 PDT |                        |              0 | DEBUG          | 00000          | next MultiXactId: 1; next MultiXactOffset: 0        |        |      |                |                    |         |       |           |          |                  | startup      |            |        0
+ Tue Aug 09 15:45:18.223 2016 PDT |           |               |       9878 |                 | 57aa5cfe.2696 |                6 |             | Tue Aug 09 15:45:18 2016 PDT |                        |              0 | DEBUG          | 00000          | oldest unfrozen transaction ID: 1822, in database 1 |        |      |                |                    |         |       |           |          |                  | startup      |            |        0
+(5 rows)
 
-EXECUTE st(100);
-  a  |   b    
------+--------
- 100 | 99.097
-(1 row)
+EXECUTE st('DEBUG');
+             log_time             | user_name | database_name | process_id | connection_from |  session_id   | session_line_num | command_tag |      session_start_time      | virtual_transaction_id | transaction_id | error_severity | sql_state_code |                       message                       | detail | hint | internal_query | internal_query_pos | context | query | query_pos | location | application_name | backend_type | leader_pid | query_id 
+----------------------------------+-----------+---------------+------------+-----------------+---------------+------------------+-------------+------------------------------+------------------------+----------------+----------------+----------------+-----------------------------------------------------+--------+------+----------------+--------------------+---------+-------+-----------+----------+------------------+--------------+------------+----------
+ Tue Aug 09 15:45:18.223 2016 PDT |           |               |       9878 |                 | 57aa5cfe.2696 |                2 |             | Tue Aug 09 15:45:18 2016 PDT |                        |              0 | DEBUG          | 00000          | checkpoint record is at 0/90002E0                   |        |      |                |                    |         |       |           |          |                  | startup      |            |        0
+ Tue Aug 09 15:45:18.223 2016 PDT |           |               |       9878 |                 | 57aa5cfe.2696 |                3 |             | Tue Aug 09 15:45:18 2016 PDT |                        |              0 | DEBUG          | 00000          | redo record is at 0/90002A8; shutdown FALSE         |        |      |                |                    |         |       |           |          |                  | startup      |            |        0
+ Tue Aug 09 15:45:18.223 2016 PDT |           |               |       9878 |                 | 57aa5cfe.2696 |                4 |             | Tue Aug 09 15:45:18 2016 PDT |                        |              0 | DEBUG          | 00000          | next transaction ID: 0/1879; next OID: 24578        |        |      |                |                    |         |       |           |          |                  | startup      |            |        0
+ Tue Aug 09 15:45:18.223 2016 PDT |           |               |       9878 |                 | 57aa5cfe.2696 |                5 |             | Tue Aug 09 15:45:18 2016 PDT |                        |              0 | DEBUG          | 00000          | next MultiXactId: 1; next MultiXactOffset: 0        |        |      |                |                    |         |       |           |          |                  | startup      |            |        0
+ Tue Aug 09 15:45:18.223 2016 PDT |           |               |       9878 |                 | 57aa5cfe.2696 |                6 |             | Tue Aug 09 15:45:18 2016 PDT |                        |              0 | DEBUG          | 00000          | oldest unfrozen transaction ID: 1822, in database 1 |        |      |                |                    |         |       |           |          |                  | startup      |            |        0
+(5 rows)
 
 DEALLOCATE st;
 -- tableoid
-SELECT tableoid::regclass, b FROM agg_csv;
- tableoid |    b    
-----------+---------
- agg_csv  |  99.097
- agg_csv  | 0.09561
- agg_csv  |  324.78
-(3 rows)
+SELECT tableoid::regclass, log_time FROM pglog_2;
+ tableoid |             log_time             
+----------+----------------------------------
+ pglog_2  | Tue Aug 09 15:45:18.235 2016 PDT
+ pglog_2  | Tue Aug 09 15:45:18.249 2016 PDT
+ pglog_2  | Tue Aug 09 15:45:18.25 2016 PDT
+ pglog_2  | Tue Aug 09 15:45:18.251 2016 PDT
+ pglog_2  | Tue Aug 09 15:45:18.251 2016 PDT
+ pglog_2  | Tue Aug 09 15:45:18.251 2016 PDT
+(6 rows)
 
 -- updates aren't supported
-INSERT INTO agg_csv VALUES(1,2.0);
-ERROR:  cannot insert into foreign table "agg_csv"
-UPDATE agg_csv SET a = 1;
-ERROR:  cannot update foreign table "agg_csv"
-DELETE FROM agg_csv WHERE a = 100;
-ERROR:  cannot delete from foreign table "agg_csv"
+UPDATE pglog_1 SET error_severity = 'WARNING';
+ERROR:  cannot update foreign table "pglog_1"
+DELETE FROM pglog_2 WHERE error_severity = 'DEBUG';
+ERROR:  cannot delete from foreign table "pglog_2"
 -- but this should be allowed
-SELECT * FROM agg_csv FOR UPDATE;
-  a  |    b    
------+---------
- 100 |  99.097
-   0 | 0.09561
-  42 |  324.78
-(3 rows)
+SELECT * FROM pglog_3 FOR UPDATE;
+             log_time             | user_name | database_name | process_id | connection_from |  session_id   | session_line_num |  command_tag   |      session_start_time      | virtual_transaction_id | transaction_id | error_severity | sql_state_code |                                                message                                                 | detail | hint | internal_query | internal_query_pos | context | query | query_pos | location | application_name | backend_type | leader_pid | query_id 
+----------------------------------+-----------+---------------+------------+-----------------+---------------+------------------+----------------+------------------------------+------------------------+----------------+----------------+----------------+--------------------------------------------------------------------------------------------------------+--------+------+----------------+--------------------+---------+-------+-----------+----------+------------------+--------------+------------+----------
+ Tue Aug 09 15:45:19.005 2016 PDT |           |               |       9876 |                 | 57aa5cfe.2694 |                5 |                | Tue Aug 09 15:45:18 2016 PDT |                        |              0 | DEBUG          | 00000          | reaping dead processes                                                                                 |        |      |                |                    |         |       |           |          |                  | postmaster   |            |        0
+ Tue Aug 09 15:45:19.005 2016 PDT |           |               |       9876 |                 | 57aa5cfe.2694 |                6 |                | Tue Aug 09 15:45:18 2016 PDT |                        |              0 | DEBUG          | 00000          | server process (PID 9885) exited with exit code 0                                                      |        |      |                |                    |         |       |           |          |                  | postmaster   |            |        0
+ Tue Aug 09 15:45:20.065 2016 PDT |           |               |       9876 |                 | 57aa5cfe.2694 |                7 |                | Tue Aug 09 15:45:18 2016 PDT |                        |              0 | DEBUG          | 00000          | forked new backend, pid=9892 socket=10                                                                 |        |      |                |                    |         |       |           |          |                  | postmaster   |            |        0
+ Tue Aug 09 15:45:20.066 2016 PDT | rdsadmin  | rdsadmin      |       9892 | localhost:49646 | 57aa5d00.26a4 |                1 | authentication | Tue Aug 09 15:45:20 2016 PDT |                        |              0 | DEBUG          | 00000          | postgres child[9892]: starting with (                                                                  |        |      |                |                    |         |       |           |          |                  | postmaster   |            |        0
+ Tue Aug 09 15:45:20.066 2016 PDT | rdsadmin  | rdsadmin      |       9892 | localhost:49646 | 57aa5d00.26a4 |                2 | authentication | Tue Aug 09 15:45:20 2016 PDT |                        |              0 | DEBUG          | 00000          |         postgres                                                                                       |        |      |                |                    |         |       |           |          |                  | postmaster   |            |        0
+ Tue Aug 09 15:45:20.066 2016 PDT | rdsadmin  | rdsadmin      |       9892 | localhost:49646 | 57aa5d00.26a4 |                3 | authentication | Tue Aug 09 15:45:20 2016 PDT |                        |              0 | DEBUG          | 00000          | )                                                                                                      |        |      |                |                    |         |       |           |          |                  | postmaster   |            |        0
+ Tue Aug 09 15:45:20.066 2016 PDT | rdsadmin  | rdsadmin      |       9892 | localhost:49646 | 57aa5d00.26a4 |                4 | authentication | Tue Aug 09 15:45:20 2016 PDT |                        |              0 | DEBUG          | 00000          | InitPostgres                                                                                           |        |      |                |                    |         |       |           |          |                  | postmaster   |            |        0
+ Tue Aug 09 15:45:20.067 2016 PDT | rdsadmin  | rdsadmin      |       9892 | localhost:49646 | 57aa5d00.26a4 |                5 | authentication | Tue Aug 09 15:45:20 2016 PDT | 2/0                    |              0 | DEBUG          | 00000          | my backend ID is 2                                                                                     |        |      |                |                    |         |       |           |          |                  | postmaster   |            |        0
+ Tue Aug 09 15:45:20.067 2016 PDT | rdsadmin  | rdsadmin      |       9892 | localhost:49646 | 57aa5d00.26a4 |                6 | authentication | Tue Aug 09 15:45:20 2016 PDT | 2/2                    |              0 | DEBUG          | 00000          | StartTransaction                                                                                       |        |      |                |                    |         |       |           |          |                  | postmaster   |            |        0
+ Tue Aug 09 15:45:20.067 2016 PDT | rdsadmin  | rdsadmin      |       9892 | localhost:49646 | 57aa5d00.26a4 |                7 | authentication | Tue Aug 09 15:45:20 2016 PDT | 2/2                    |              0 | DEBUG          | 00000          | name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children:  |        |      |                |                    |         |       |           |          |                  | postmaster   |            |        0
+(10 rows)
 
--- copy from isn't supported either
-COPY agg_csv FROM STDIN;
-ERROR:  cannot insert into foreign table "agg_csv"
 -- constraint exclusion tests
 \t on
-EXPLAIN (VERBOSE, COSTS FALSE) SELECT * FROM agg_csv WHERE a < 0;
- Foreign Scan on public.agg_csv
-   Output: a, b
-   Filter: (agg_csv.a < 0)
-   Foreign File: /workplace/kadamnn/postgresql-logfdw/data/agg.csv
+EXPLAIN (VERBOSE, COSTS FALSE) SELECT * FROM pglog_1 WHERE process_id < 0;
+ Foreign Scan on public.pglog_1
+   Output: log_time, user_name, database_name, process_id, connection_from, session_id, session_line_num, command_tag, session_start_time, virtual_transaction_id, transaction_id, error_severity, sql_state_code, message, detail, hint, internal_query, internal_query_pos, context, query, query_pos, location, application_name, backend_type, leader_pid, query_id
+   Filter: (pglog_1.process_id < 0)
+   Foreign File: /rdsdbdata/log/error/postgresql.log.2016-08-09-22.csv
 
 \t off
-SELECT * FROM agg_csv WHERE a < 0;
- a | b 
----+---
+SELECT * FROM pglog_1 WHERE process_id < 0;
+ log_time | user_name | database_name | process_id | connection_from | session_id | session_line_num | command_tag | session_start_time | virtual_transaction_id | transaction_id | error_severity | sql_state_code | message | detail | hint | internal_query | internal_query_pos | context | query | query_pos | location | application_name | backend_type | leader_pid | query_id 
+----------+-----------+---------------+------------+-----------------+------------+------------------+-------------+--------------------+------------------------+----------------+----------------+----------------+---------+--------+------+----------------+--------------------+---------+-------+-----------+----------+------------------+--------------+------------+----------
 (0 rows)
 
 SET constraint_exclusion = 'on';
 \t on
-EXPLAIN (VERBOSE, COSTS FALSE) SELECT * FROM agg_csv WHERE a < 0;
+EXPLAIN (VERBOSE, COSTS FALSE) SELECT * FROM pglog_1 WHERE process_id < 0;
  Result
-   Output: a, b
+   Output: log_time, user_name, database_name, process_id, connection_from, session_id, session_line_num, command_tag, session_start_time, virtual_transaction_id, transaction_id, error_severity, sql_state_code, message, detail, hint, internal_query, internal_query_pos, context, query, query_pos, location, application_name, backend_type, leader_pid, query_id
    One-Time Filter: false
 
 \t off
-SELECT * FROM agg_csv WHERE a < 0;
- a | b 
----+---
+SELECT * FROM pglog_1 WHERE process_id < 0;
+ log_time | user_name | database_name | process_id | connection_from | session_id | session_line_num | command_tag | session_start_time | virtual_transaction_id | transaction_id | error_severity | sql_state_code | message | detail | hint | internal_query | internal_query_pos | context | query | query_pos | location | application_name | backend_type | leader_pid | query_id 
+----------+-----------+---------------+------------+-----------------+------------+------------------+-------------+--------------------+------------------------+----------------+----------------+----------------+---------+--------+------+----------------+--------------------+---------+-------+-----------+----------+------------------+--------------+------------+----------
 (0 rows)
 
 RESET constraint_exclusion;
 -- table inheritance tests
-CREATE TABLE agg (a int2, b float4);
-ALTER FOREIGN TABLE agg_csv INHERIT agg;
+CREATE TABLE agg (
+  log_time timestamp(3) with time zone,
+  user_name text,
+  database_name text,
+  process_id integer,
+  connection_from text,
+  session_id text,
+  session_line_num bigint,
+  command_tag text,
+  session_start_time timestamp with time zone,
+  virtual_transaction_id text,
+  transaction_id bigint,
+  error_severity text,
+  sql_state_code text,
+  message text,
+  detail text,
+  hint text,
+  internal_query text,
+  internal_query_pos integer,
+  context text,
+  query text,
+  query_pos integer,
+  location text,
+  application_name text,
+  backend_type text,
+  leader_pid integer,
+  query_id bigint);
+ALTER FOREIGN TABLE pglog_1 INHERIT agg;
 SELECT tableoid::regclass, * FROM agg;
- tableoid |  a  |    b    
-----------+-----+---------
- agg_csv  | 100 |  99.097
- agg_csv  |   0 | 0.09561
- agg_csv  |  42 |  324.78
-(3 rows)
+ tableoid |             log_time             | user_name | database_name | process_id | connection_from |  session_id   | session_line_num | command_tag |      session_start_time      | virtual_transaction_id | transaction_id | error_severity | sql_state_code |                                  message                                  | detail |                          hint                          | internal_query | internal_query_pos | context | query | query_pos | location | application_name | backend_type | leader_pid | query_id 
+----------+----------------------------------+-----------+---------------+------------+-----------------+---------------+------------------+-------------+------------------------------+------------------------+----------------+----------------+----------------+---------------------------------------------------------------------------+--------+--------------------------------------------------------+----------------+--------------------+---------+-------+-----------+----------+------------------+--------------+------------+----------
+ pglog_1  | Tue Aug 09 15:45:18.172 2016 PDT |           |               |       9876 |                 | 57aa5cfe.2694 |                1 |             | Tue Aug 09 15:45:18 2016 PDT |                        |              0 | LOG            | 00000          | ending log output to stderr                                               |        | Future log output will go to log destination "csvlog". |                |                    |         |       |           |          |                  | postmaster   |            |        0
+ pglog_1  | Tue Aug 09 15:45:18.175 2016 PDT |           |               |       9878 |                 | 57aa5cfe.2696 |                1 |             | Tue Aug 09 15:45:18 2016 PDT |                        |              0 | LOG            | 00000          | database system was interrupted; last known up at 2016-08-09 22:43:34 UTC |        |                                                        |                |                    |         |       |           |          |                  | postmaster   |            |        0
+ pglog_1  | Tue Aug 09 15:45:18.223 2016 PDT |           |               |       9878 |                 | 57aa5cfe.2696 |                2 |             | Tue Aug 09 15:45:18 2016 PDT |                        |              0 | DEBUG          | 00000          | checkpoint record is at 0/90002E0                                         |        |                                                        |                |                    |         |       |           |          |                  | startup      |            |        0
+ pglog_1  | Tue Aug 09 15:45:18.223 2016 PDT |           |               |       9878 |                 | 57aa5cfe.2696 |                3 |             | Tue Aug 09 15:45:18 2016 PDT |                        |              0 | DEBUG          | 00000          | redo record is at 0/90002A8; shutdown FALSE                               |        |                                                        |                |                    |         |       |           |          |                  | startup      |            |        0
+ pglog_1  | Tue Aug 09 15:45:18.223 2016 PDT |           |               |       9878 |                 | 57aa5cfe.2696 |                4 |             | Tue Aug 09 15:45:18 2016 PDT |                        |              0 | DEBUG          | 00000          | next transaction ID: 0/1879; next OID: 24578                              |        |                                                        |                |                    |         |       |           |          |                  | startup      |            |        0
+ pglog_1  | Tue Aug 09 15:45:18.223 2016 PDT |           |               |       9878 |                 | 57aa5cfe.2696 |                5 |             | Tue Aug 09 15:45:18 2016 PDT |                        |              0 | DEBUG          | 00000          | next MultiXactId: 1; next MultiXactOffset: 0                              |        |                                                        |                |                    |         |       |           |          |                  | startup      |            |        0
+ pglog_1  | Tue Aug 09 15:45:18.223 2016 PDT |           |               |       9878 |                 | 57aa5cfe.2696 |                6 |             | Tue Aug 09 15:45:18 2016 PDT |                        |              0 | DEBUG          | 00000          | oldest unfrozen transaction ID: 1822, in database 1                       |        |                                                        |                |                    |         |       |           |          |                  | startup      |            |        0
+(7 rows)
 
-SELECT tableoid::regclass, * FROM agg_csv;
- tableoid |  a  |    b    
-----------+-----+---------
- agg_csv  | 100 |  99.097
- agg_csv  |   0 | 0.09561
- agg_csv  |  42 |  324.78
-(3 rows)
+SELECT tableoid::regclass, * FROM pglog_1;
+ tableoid |             log_time             | user_name | database_name | process_id | connection_from |  session_id   | session_line_num | command_tag |      session_start_time      | virtual_transaction_id | transaction_id | error_severity | sql_state_code |                                  message                                  | detail |                          hint                          | internal_query | internal_query_pos | context | query | query_pos | location | application_name | backend_type | leader_pid | query_id 
+----------+----------------------------------+-----------+---------------+------------+-----------------+---------------+------------------+-------------+------------------------------+------------------------+----------------+----------------+----------------+---------------------------------------------------------------------------+--------+--------------------------------------------------------+----------------+--------------------+---------+-------+-----------+----------+------------------+--------------+------------+----------
+ pglog_1  | Tue Aug 09 15:45:18.172 2016 PDT |           |               |       9876 |                 | 57aa5cfe.2694 |                1 |             | Tue Aug 09 15:45:18 2016 PDT |                        |              0 | LOG            | 00000          | ending log output to stderr                                               |        | Future log output will go to log destination "csvlog". |                |                    |         |       |           |          |                  | postmaster   |            |        0
+ pglog_1  | Tue Aug 09 15:45:18.175 2016 PDT |           |               |       9878 |                 | 57aa5cfe.2696 |                1 |             | Tue Aug 09 15:45:18 2016 PDT |                        |              0 | LOG            | 00000          | database system was interrupted; last known up at 2016-08-09 22:43:34 UTC |        |                                                        |                |                    |         |       |           |          |                  | postmaster   |            |        0
+ pglog_1  | Tue Aug 09 15:45:18.223 2016 PDT |           |               |       9878 |                 | 57aa5cfe.2696 |                2 |             | Tue Aug 09 15:45:18 2016 PDT |                        |              0 | DEBUG          | 00000          | checkpoint record is at 0/90002E0                                         |        |                                                        |                |                    |         |       |           |          |                  | startup      |            |        0
+ pglog_1  | Tue Aug 09 15:45:18.223 2016 PDT |           |               |       9878 |                 | 57aa5cfe.2696 |                3 |             | Tue Aug 09 15:45:18 2016 PDT |                        |              0 | DEBUG          | 00000          | redo record is at 0/90002A8; shutdown FALSE                               |        |                                                        |                |                    |         |       |           |          |                  | startup      |            |        0
+ pglog_1  | Tue Aug 09 15:45:18.223 2016 PDT |           |               |       9878 |                 | 57aa5cfe.2696 |                4 |             | Tue Aug 09 15:45:18 2016 PDT |                        |              0 | DEBUG          | 00000          | next transaction ID: 0/1879; next OID: 24578                              |        |                                                        |                |                    |         |       |           |          |                  | startup      |            |        0
+ pglog_1  | Tue Aug 09 15:45:18.223 2016 PDT |           |               |       9878 |                 | 57aa5cfe.2696 |                5 |             | Tue Aug 09 15:45:18 2016 PDT |                        |              0 | DEBUG          | 00000          | next MultiXactId: 1; next MultiXactOffset: 0                              |        |                                                        |                |                    |         |       |           |          |                  | startup      |            |        0
+ pglog_1  | Tue Aug 09 15:45:18.223 2016 PDT |           |               |       9878 |                 | 57aa5cfe.2696 |                6 |             | Tue Aug 09 15:45:18 2016 PDT |                        |              0 | DEBUG          | 00000          | oldest unfrozen transaction ID: 1822, in database 1                       |        |                                                        |                |                    |         |       |           |          |                  | startup      |            |        0
+(7 rows)
 
 SELECT tableoid::regclass, * FROM ONLY agg;
- tableoid | a | b 
-----------+---+---
+ tableoid | log_time | user_name | database_name | process_id | connection_from | session_id | session_line_num | command_tag | session_start_time | virtual_transaction_id | transaction_id | error_severity | sql_state_code | message | detail | hint | internal_query | internal_query_pos | context | query | query_pos | location | application_name | backend_type | leader_pid | query_id 
+----------+----------+-----------+---------------+------------+-----------------+------------+------------------+-------------+--------------------+------------------------+----------------+----------------+----------------+---------+--------+------+----------------+--------------------+---------+-------+-----------+----------+------------------+--------------+------------+----------
 (0 rows)
 
 -- updates aren't supported
-UPDATE agg SET a = 1;
-ERROR:  cannot update foreign table "agg_csv"
-DELETE FROM agg WHERE a = 100;
-ERROR:  cannot delete from foreign table "agg_csv"
+UPDATE agg SET error_severity = 'WARNING';
+ERROR:  cannot update foreign table "pglog_1"
+DELETE FROM agg WHERE error_severity = 'LOG';
+ERROR:  cannot delete from foreign table "pglog_1"
 -- but this should be allowed
 SELECT tableoid::regclass, * FROM agg FOR UPDATE;
- tableoid |  a  |    b    
-----------+-----+---------
- agg_csv  | 100 |  99.097
- agg_csv  |   0 | 0.09561
- agg_csv  |  42 |  324.78
-(3 rows)
+ tableoid |             log_time             | user_name | database_name | process_id | connection_from |  session_id   | session_line_num | command_tag |      session_start_time      | virtual_transaction_id | transaction_id | error_severity | sql_state_code |                                  message                                  | detail |                          hint                          | internal_query | internal_query_pos | context | query | query_pos | location | application_name | backend_type | leader_pid | query_id 
+----------+----------------------------------+-----------+---------------+------------+-----------------+---------------+------------------+-------------+------------------------------+------------------------+----------------+----------------+----------------+---------------------------------------------------------------------------+--------+--------------------------------------------------------+----------------+--------------------+---------+-------+-----------+----------+------------------+--------------+------------+----------
+ pglog_1  | Tue Aug 09 15:45:18.172 2016 PDT |           |               |       9876 |                 | 57aa5cfe.2694 |                1 |             | Tue Aug 09 15:45:18 2016 PDT |                        |              0 | LOG            | 00000          | ending log output to stderr                                               |        | Future log output will go to log destination "csvlog". |                |                    |         |       |           |          |                  | postmaster   |            |        0
+ pglog_1  | Tue Aug 09 15:45:18.175 2016 PDT |           |               |       9878 |                 | 57aa5cfe.2696 |                1 |             | Tue Aug 09 15:45:18 2016 PDT |                        |              0 | LOG            | 00000          | database system was interrupted; last known up at 2016-08-09 22:43:34 UTC |        |                                                        |                |                    |         |       |           |          |                  | postmaster   |            |        0
+ pglog_1  | Tue Aug 09 15:45:18.223 2016 PDT |           |               |       9878 |                 | 57aa5cfe.2696 |                2 |             | Tue Aug 09 15:45:18 2016 PDT |                        |              0 | DEBUG          | 00000          | checkpoint record is at 0/90002E0                                         |        |                                                        |                |                    |         |       |           |          |                  | startup      |            |        0
+ pglog_1  | Tue Aug 09 15:45:18.223 2016 PDT |           |               |       9878 |                 | 57aa5cfe.2696 |                3 |             | Tue Aug 09 15:45:18 2016 PDT |                        |              0 | DEBUG          | 00000          | redo record is at 0/90002A8; shutdown FALSE                               |        |                                                        |                |                    |         |       |           |          |                  | startup      |            |        0
+ pglog_1  | Tue Aug 09 15:45:18.223 2016 PDT |           |               |       9878 |                 | 57aa5cfe.2696 |                4 |             | Tue Aug 09 15:45:18 2016 PDT |                        |              0 | DEBUG          | 00000          | next transaction ID: 0/1879; next OID: 24578                              |        |                                                        |                |                    |         |       |           |          |                  | startup      |            |        0
+ pglog_1  | Tue Aug 09 15:45:18.223 2016 PDT |           |               |       9878 |                 | 57aa5cfe.2696 |                5 |             | Tue Aug 09 15:45:18 2016 PDT |                        |              0 | DEBUG          | 00000          | next MultiXactId: 1; next MultiXactOffset: 0                              |        |                                                        |                |                    |         |       |           |          |                  | startup      |            |        0
+ pglog_1  | Tue Aug 09 15:45:18.223 2016 PDT |           |               |       9878 |                 | 57aa5cfe.2696 |                6 |             | Tue Aug 09 15:45:18 2016 PDT |                        |              0 | DEBUG          | 00000          | oldest unfrozen transaction ID: 1822, in database 1                       |        |                                                        |                |                    |         |       |           |          |                  | startup      |            |        0
+(7 rows)
 
-ALTER FOREIGN TABLE agg_csv NO INHERIT agg;
+ALTER FOREIGN TABLE pglog_1 NO INHERIT agg;
 DROP TABLE agg;
--- declarative partitioning tests
-SET ROLE regress_file_fdw_superuser;
-CREATE TABLE pt (a int, b text) partition by list (a);
-CREATE FOREIGN TABLE p1 partition of pt for values in (1) SERVER file_server
-OPTIONS (format 'csv', filename '/workplace/kadamnn/postgresql-logfdw/data/list1.csv', delimiter ',');
-CREATE TABLE p2 partition of pt for values in (2);
-SELECT tableoid::regclass, * FROM pt;
- tableoid | a |  b  
-----------+---+-----
- p1       | 1 | foo
- p1       | 1 | bar
-(2 rows)
+-- privilege tests
+SET ROLE log_fdw_superuser;
+SELECT * FROM pglog_2 ORDER BY log_time;
+             log_time             | user_name | database_name | process_id | connection_from |  session_id   | session_line_num | command_tag |      session_start_time      | virtual_transaction_id | transaction_id | error_severity | sql_state_code |                                                                                                                message                                                                                                                | detail | hint | internal_query | internal_query_pos | context | query | query_pos | location | application_name | backend_type | leader_pid | query_id 
+----------------------------------+-----------+---------------+------------+-----------------+---------------+------------------+-------------+------------------------------+------------------------+----------------+----------------+----------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+--------+------+----------------+--------------------+---------+-------+-----------+----------+------------------+--------------+------------+----------
+ Tue Aug 09 15:45:18.235 2016 PDT |           |               |       9878 |                 | 57aa5cfe.2696 |               20 |             | Tue Aug 09 15:45:18 2016 PDT |                        |              0 | DEBUG          | 00000          | performing replication slot checkpoint                                                                                                                                                                                                |        |      |                |                    |         |       |           |          |                  | checkpointer |            |        0
+ Tue Aug 09 15:45:18.249 2016 PDT |           |               |       9878 |                 | 57aa5cfe.2696 |               21 |             | Tue Aug 09 15:45:18 2016 PDT |                        |              0 | DEBUG          | 00000          | attempting to remove WAL segments older than log file 000000000000000000000000                                                                                                                                                        |        |      |                |                    |         |       |           |          |                  | checkpointer |            |        0
+ Tue Aug 09 15:45:18.25 2016 PDT  |           |               |       9878 |                 | 57aa5cfe.2696 |               22 |             | Tue Aug 09 15:45:18 2016 PDT |                        |              0 | LOG            | 00000          | checkpoint complete: wrote 0 buffers (0.0%); 0 transaction log file(s) added, 0 removed, 0 recycled; write=0.005 s, sync=0.000 s, total=0.017 s; sync files=0, longest=0.000 s, average=0.000 s; distance=16383 kB, estimate=16383 kB |        |      |                |                    |         |       |           |          |                  | checkpointer |            |        0
+ Tue Aug 09 15:45:18.251 2016 PDT |           |               |       9878 |                 | 57aa5cfe.2696 |               23 |             | Tue Aug 09 15:45:18 2016 PDT |                        |              0 | DEBUG          | 00000          | MultiXactId wrap limit is 2147483648, limited by database with OID 1                                                                                                                                                                  |        |      |                |                    |         |       |           |          |                  | startup      |            |        0
+ Tue Aug 09 15:45:18.251 2016 PDT |           |               |       9878 |                 | 57aa5cfe.2696 |               24 |             | Tue Aug 09 15:45:18 2016 PDT |                        |              0 | LOG            | 00000          | MultiXact member wraparound protections are now enabled                                                                                                                                                                               |        |      |                |                    |         |       |           |          |                  | startup      |            |        0
+ Tue Aug 09 15:45:18.251 2016 PDT |           |               |       9878 |                 | 57aa5cfe.2696 |               25 |             | Tue Aug 09 15:45:18 2016 PDT |                        |              0 | DEBUG          | 00000          | MultiXact member stop limit is now 4294914944 based on MultiXact 1                                                                                                                                                                    |        |      |                |                    |         |       |           |          |                  | startup      |            |        0
+(6 rows)
 
-SELECT tableoid::regclass, * FROM p1;
- tableoid | a |  b  
-----------+---+-----
- p1       | 1 | foo
- p1       | 1 | bar
-(2 rows)
+SET ROLE log_fdw_user;
+SELECT * FROM pglog_2 ORDER BY log_time;
+ERROR:  permission denied for foreign table pglog_2
+SET ROLE no_priv_user;
+SELECT * FROM pglog_2 ORDER BY log_time;   -- ERROR
+ERROR:  permission denied for foreign table pglog_2
+SET ROLE log_fdw_user;
+\t on
+EXPLAIN (VERBOSE, COSTS FALSE) SELECT * FROM pglog_2 WHERE process_id > 0;
+ERROR:  permission denied for foreign table pglog_2
+\t off
+-- log FDW allows foreign tables to be accessed without user mapping
+DROP USER MAPPING FOR log_fdw_user SERVER log_server;
+SELECT * FROM pglog_2 ORDER BY log_time;
+ERROR:  permission denied for foreign table pglog_2
+-- privilege tests for object
+SET ROLE log_fdw_superuser;
+ALTER FOREIGN TABLE pglog_3 OWNER TO log_fdw_user;
+ALTER FOREIGN TABLE pglog_3 OPTIONS (SET filename 'a');
+ERROR:  The log file path specified was invalid.
+HINT:  Use list_postgres_log_files() and create_foreign_table_for_log_file(table_name text, server_name text, log_file_name text) to easily create foreign data wrappers to Postgres log files
+ALTER FOREIGN TABLE pglog_3 OPTIONS (SET format 'text');
+ERROR:  option "format" not found
+ALTER FOREIGN TABLE pglog_3 OPTIONS (SET filename '/rdsdbdata/log/error/postgresql.log.2016-08-10-01.csv');
+SET ROLE log_fdw_user;
+ALTER FOREIGN TABLE pglog_3 OPTIONS (SET filename '/rdsdbdata/log/error/postgresql.log.2016-08-10-01.csv');
+SET ROLE log_fdw_superuser;
+-- make sure list function works
+SELECT * from list_postgres_log_files() order by 1;
+                   file_name                    | file_size_bytes 
+------------------------------------------------+-----------------
+ badcsvformat.csv.gz                            |              76
+ n                                              |              37
+ postgresql.log.2016-08-09-22.compressed.csv.gz |             422
+ postgresql.log.2016-08-09-22.csv               |            1208
+ postgresql.log.2016-08-09-23.csv               |            1265
+ postgresql.log.2016-08-10-00.csv               |            1904
+ postgresql.log.2016-08-10-01.csv               |            1220
+ postgresql.log.agg.bad.csv                     |              42
+ postgresql.log.agg.csv.csv                     |              46
+ postgresql.log.agg.data.csv                    |              38
+ postgresql.log.bad.gzfile.gz                   |              75
+ postgresql.log.mix.csv                         |            1170
+ postgresql.log.old.csv                         |            1111
+ postgresql.log.text.csv.csv                    |              86
+ sonnet116.compressed.txt.gz                    |             403
+ sonnet116.txt                                  |             634
+(16 rows)
 
-SELECT tableoid::regclass, * FROM p2;
- tableoid | a | b 
-----------+---+---
-(0 rows)
+SELECT list_postgres_log_files() ORDER BY 1;
+               list_postgres_log_files                
+------------------------------------------------------
+ (badcsvformat.csv.gz,76)
+ (n,37)
+ (postgresql.log.2016-08-09-22.compressed.csv.gz,422)
+ (postgresql.log.2016-08-09-22.csv,1208)
+ (postgresql.log.2016-08-09-23.csv,1265)
+ (postgresql.log.2016-08-10-00.csv,1904)
+ (postgresql.log.2016-08-10-01.csv,1220)
+ (postgresql.log.agg.bad.csv,42)
+ (postgresql.log.agg.csv.csv,46)
+ (postgresql.log.agg.data.csv,38)
+ (postgresql.log.bad.gzfile.gz,75)
+ (postgresql.log.mix.csv,1170)
+ (postgresql.log.old.csv,1111)
+ (postgresql.log.text.csv.csv,86)
+ (sonnet116.compressed.txt.gz,403)
+ (sonnet116.txt,634)
+(16 rows)
 
-COPY pt FROM '/workplace/kadamnn/postgresql-logfdw/data/list2.bad' with (format 'csv', delimiter ','); -- ERROR
-ERROR:  cannot insert into foreign table "p1"
-CONTEXT:  COPY pt, line 2: "1,qux"
-COPY pt FROM '/workplace/kadamnn/postgresql-logfdw/data/list2.csv' with (format 'csv', delimiter ',');
-SELECT tableoid::regclass, * FROM pt;
- tableoid | a |  b  
-----------+---+-----
- p1       | 1 | foo
- p1       | 1 | bar
- p2       | 2 | baz
- p2       | 2 | qux
-(4 rows)
+-- make sure helper function for creating table works
+SELECT create_foreign_table_for_log_file('my_postgres_error_log', 'log_server', 'postgresql.log.2016-08-09-22.csv');
+ create_foreign_table_for_log_file 
+-----------------------------------
+ 
+(1 row)
 
-SELECT tableoid::regclass, * FROM p1;
- tableoid | a |  b  
-----------+---+-----
- p1       | 1 | foo
- p1       | 1 | bar
-(2 rows)
+SELECT log_time, message from my_postgres_error_log order by 1;
+             log_time             |                                  message                                  
+----------------------------------+---------------------------------------------------------------------------
+ Tue Aug 09 15:45:18.172 2016 PDT | ending log output to stderr
+ Tue Aug 09 15:45:18.175 2016 PDT | database system was interrupted; last known up at 2016-08-09 22:43:34 UTC
+ Tue Aug 09 15:45:18.223 2016 PDT | checkpoint record is at 0/90002E0
+ Tue Aug 09 15:45:18.223 2016 PDT | redo record is at 0/90002A8; shutdown FALSE
+ Tue Aug 09 15:45:18.223 2016 PDT | next transaction ID: 0/1879; next OID: 24578
+ Tue Aug 09 15:45:18.223 2016 PDT | next MultiXactId: 1; next MultiXactOffset: 0
+ Tue Aug 09 15:45:18.223 2016 PDT | oldest unfrozen transaction ID: 1822, in database 1
+(7 rows)
 
-SELECT tableoid::regclass, * FROM p2;
- tableoid | a |  b  
-----------+---+-----
- p2       | 2 | baz
- p2       | 2 | qux
-(2 rows)
+-- make sure helper function for creating table errors out at appropriate times
+SELECT create_foreign_table_for_log_file('my_postgres_error_log_2', 'log_server', 'postgresql.log.doesnt_exist.csv');
+ERROR:  The log file path specified was invalid.
+HINT:  Use list_postgres_log_files() and create_foreign_table_for_log_file(table_name text, server_name text, log_file_name text) to easily create foreign data wrappers to Postgres log files
+CONTEXT:  SQL statement "CREATE FOREIGN TABLE my_postgres_error_log_2 (
+		  log_time			timestamp(3) with time zone,
+		  user_name			text,
+		  database_name			text,
+		  process_id			integer,
+		  connection_from		text,
+		  session_id			text,
+		  session_line_num		bigint,
+		  command_tag			text,
+		  session_start_time		timestamp with time zone,
+		  virtual_transaction_id	text,
+		  transaction_id		bigint,
+		  error_severity		text,
+		  sql_state_code		text,
+		  message			text,
+		  detail			text,
+		  hint				text,
+		  internal_query		text,
+		  internal_query_pos		integer,
+		  context			text,
+		  query				text,
+		  query_pos			integer,
+		  location			text,
+		  application_name		text,
+		  backend_type			text,
+		  leader_pid			integer,
+		  query_id			bigint
+		) SERVER log_server
+		OPTIONS (filename '/rdsdbdata/log/error/postgresql.log.doesnt_exist.csv')"
+PL/pgSQL function create_foreign_table_for_log_file(text,text,text) line 5 at EXECUTE
+SELECT create_foreign_table_for_log_file('my_postgres_error_log', 'log_server', 'postgresql.log.2016-08-09-22.csv');
+ERROR:  relation "my_postgres_error_log" already exists
+CONTEXT:  SQL statement "CREATE FOREIGN TABLE my_postgres_error_log (
+		  log_time			timestamp(3) with time zone,
+		  user_name			text,
+		  database_name			text,
+		  process_id			integer,
+		  connection_from		text,
+		  session_id			text,
+		  session_line_num		bigint,
+		  command_tag			text,
+		  session_start_time		timestamp with time zone,
+		  virtual_transaction_id	text,
+		  transaction_id		bigint,
+		  error_severity		text,
+		  sql_state_code		text,
+		  message			text,
+		  detail			text,
+		  hint				text,
+		  internal_query		text,
+		  internal_query_pos		integer,
+		  context			text,
+		  query				text,
+		  query_pos			integer,
+		  location			text,
+		  application_name		text,
+		  backend_type			text,
+		  leader_pid			integer,
+		  query_id			bigint
+		) SERVER log_server
+		OPTIONS (filename '/rdsdbdata/log/error/postgresql.log.2016-08-09-22.csv')"
+PL/pgSQL function create_foreign_table_for_log_file(text,text,text) line 5 at EXECUTE
+SELECT create_foreign_table_for_log_file('my_postgres_error_log_2', 'doesnt_exist', 'postgresql.log.2016-08-09-22.csv');
+ERROR:  server "doesnt_exist" does not exist
+CONTEXT:  SQL statement "CREATE FOREIGN TABLE my_postgres_error_log_2 (
+		  log_time			timestamp(3) with time zone,
+		  user_name			text,
+		  database_name			text,
+		  process_id			integer,
+		  connection_from		text,
+		  session_id			text,
+		  session_line_num		bigint,
+		  command_tag			text,
+		  session_start_time		timestamp with time zone,
+		  virtual_transaction_id	text,
+		  transaction_id		bigint,
+		  error_severity		text,
+		  sql_state_code		text,
+		  message			text,
+		  detail			text,
+		  hint				text,
+		  internal_query		text,
+		  internal_query_pos		integer,
+		  context			text,
+		  query				text,
+		  query_pos			integer,
+		  location			text,
+		  application_name		text,
+		  backend_type			text,
+		  leader_pid			integer,
+		  query_id			bigint
+		) SERVER doesnt_exist
+		OPTIONS (filename '/rdsdbdata/log/error/postgresql.log.2016-08-09-22.csv')"
+PL/pgSQL function create_foreign_table_for_log_file(text,text,text) line 5 at EXECUTE
+SELECT create_foreign_table_for_log_file(123, 456, 789);
+ERROR:  function create_foreign_table_for_log_file(integer, integer, integer) does not exist
+LINE 1: SELECT create_foreign_table_for_log_file(123, 456, 789);
+               ^
+HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
+-- double check the identifier quoting
+SELECT create_foreign_table_for_log_file('quote me', 'log_server', 'postgresql.log.2016-08-09-22.csv');
+ create_foreign_table_for_log_file 
+-----------------------------------
+ 
+(1 row)
 
-INSERT INTO pt VALUES (1, 'xyzzy'); -- ERROR
-ERROR:  cannot insert into foreign table "p1"
-INSERT INTO pt VALUES (2, 'xyzzy');
-UPDATE pt set a = 1 where a = 2; -- ERROR
-ERROR:  cannot insert into foreign table "p1"
-SELECT tableoid::regclass, * FROM pt;
- tableoid | a |   b   
-----------+---+-------
- p1       | 1 | foo
- p1       | 1 | bar
- p2       | 2 | baz
- p2       | 2 | qux
- p2       | 2 | xyzzy
-(5 rows)
+SELECT log_time, message from "quote me" order by 1;
+             log_time             |                                  message                                  
+----------------------------------+---------------------------------------------------------------------------
+ Tue Aug 09 15:45:18.172 2016 PDT | ending log output to stderr
+ Tue Aug 09 15:45:18.175 2016 PDT | database system was interrupted; last known up at 2016-08-09 22:43:34 UTC
+ Tue Aug 09 15:45:18.223 2016 PDT | checkpoint record is at 0/90002E0
+ Tue Aug 09 15:45:18.223 2016 PDT | redo record is at 0/90002A8; shutdown FALSE
+ Tue Aug 09 15:45:18.223 2016 PDT | next transaction ID: 0/1879; next OID: 24578
+ Tue Aug 09 15:45:18.223 2016 PDT | next MultiXactId: 1; next MultiXactOffset: 0
+ Tue Aug 09 15:45:18.223 2016 PDT | oldest unfrozen transaction ID: 1822, in database 1
+(7 rows)
 
-SELECT tableoid::regclass, * FROM p1;
- tableoid | a |  b  
-----------+---+-----
- p1       | 1 | foo
- p1       | 1 | bar
-(2 rows)
+-- make sure you cannot hax the helper function for creating table
+SELECT create_foreign_table_for_log_file('dealwithit"; select 1; --', 'whatever', 'whatever');
+ERROR:  server "whatever" does not exist
+CONTEXT:  SQL statement "CREATE FOREIGN TABLE "dealwithit""; select 1; --" (
+		  log_entry text
+		) SERVER whatever
+		OPTIONS (filename '/rdsdbdata/log/error/whatever')"
+PL/pgSQL function create_foreign_table_for_log_file(text,text,text) line 36 at EXECUTE
+-- make sure you cannot create a foreign table for the log directory or its parent directory
+SELECT create_foreign_table_for_log_file('postgres_log_dir', 'log_server', '.');
+ERROR:  The log file path specified was invalid.
+HINT:  Use list_postgres_log_files() and create_foreign_table_for_log_file(table_name text, server_name text, log_file_name text) to easily create foreign data wrappers to Postgres log files
+CONTEXT:  SQL statement "CREATE FOREIGN TABLE postgres_log_dir (
+		  log_entry text
+		) SERVER log_server
+		OPTIONS (filename '/rdsdbdata/log/error/.')"
+PL/pgSQL function create_foreign_table_for_log_file(text,text,text) line 36 at EXECUTE
+SELECT create_foreign_table_for_log_file('postgres_log_dir', 'log_server', '..');
+ERROR:  The log file path specified was invalid.
+HINT:  Use list_postgres_log_files() and create_foreign_table_for_log_file(table_name text, server_name text, log_file_name text) to easily create foreign data wrappers to Postgres log files
+CONTEXT:  SQL statement "CREATE FOREIGN TABLE postgres_log_dir (
+		  log_entry text
+		) SERVER log_server
+		OPTIONS (filename '/rdsdbdata/log/error/..')"
+PL/pgSQL function create_foreign_table_for_log_file(text,text,text) line 36 at EXECUTE
+SELECT create_foreign_table_for_log_file('postgres_log_dir', 'log_server', '');
+ERROR:  The log file path specified was invalid.
+HINT:  Use list_postgres_log_files() and create_foreign_table_for_log_file(table_name text, server_name text, log_file_name text) to easily create foreign data wrappers to Postgres log files
+CONTEXT:  SQL statement "CREATE FOREIGN TABLE postgres_log_dir (
+		  log_entry text
+		) SERVER log_server
+		OPTIONS (filename '/rdsdbdata/log/error/')"
+PL/pgSQL function create_foreign_table_for_log_file(text,text,text) line 36 at EXECUTE
+-- make sure you can create foreign table for non-CSV files
+SELECT create_foreign_table_for_log_file('sonnet116', 'log_server', 'sonnet116.txt');
+ create_foreign_table_for_log_file 
+-----------------------------------
+ 
+(1 row)
 
-SELECT tableoid::regclass, * FROM p2;
- tableoid | a |   b   
-----------+---+-------
- p2       | 2 | baz
- p2       | 2 | qux
- p2       | 2 | xyzzy
+SELECT create_foreign_table_for_log_file('n', 'log_server', 'n');
+ create_foreign_table_for_log_file 
+-----------------------------------
+ 
+(1 row)
+
+SELECT * from sonnet116;
+                        log_entry                        
+---------------------------------------------------------
+ Let me not to the marriage of true minds   
+ Admit impediments. Love is not love   
+ Which alters when it alteration finds,   
+ Or bends with the remover to remove:   
+ O, no! it is an ever-fixed mark, 
+ That looks on tempests and is never shaken;   
+ It is the star to every wandering bark,   
+ Whose worth’s unknown, although his height be taken.   
+ Love ’s not Time’s fool, though rosy lips and cheeks   
+ Within his bending sickle’s compass come;
+ Love alters not with his brief hours and weeks,   
+ But bears it out even to the edge of doom.   
+   If this be error, and upon me prov’d,   
+   I never writ, nor no man ever lov’d.
+(14 rows)
+
+SELECT * from n;
+   log_entry    
+----------------
+ test line 1
+ test    line 2
+ test line 3
 (3 rows)
 
-DROP TABLE pt;
--- generated column tests
-CREATE FOREIGN TABLE gft1 (a int, b text, c text GENERATED ALWAYS AS ('foo') STORED) SERVER file_server
-OPTIONS (format 'csv', filename '/workplace/kadamnn/postgresql-logfdw/data/list1.csv', delimiter ',');
-SELECT a, c FROM gft1;
- a |   c    
----+--------
- 1 | _null_
- 1 | _null_
-(2 rows)
+-- make sure we can create foreign table for compressed csv and non-csv files
+SELECT create_foreign_table_for_log_file('sonnet116_compressed', 'log_server', 'sonnet116.compressed.txt.gz');
+ create_foreign_table_for_log_file 
+-----------------------------------
+ 
+(1 row)
 
-DROP FOREIGN TABLE gft1;
--- privilege tests
-SET ROLE regress_file_fdw_superuser;
-SELECT * FROM agg_text ORDER BY a;
-  a  |    b    
------+---------
-   0 | 0.09561
-  42 |  324.78
-  56 |     7.8
- 100 |  99.097
-(4 rows)
+SELECT create_foreign_table_for_log_file('pglog_compressed', 'log_server', 'postgresql.log.2016-08-09-22.compressed.csv.gz');
+ create_foreign_table_for_log_file 
+-----------------------------------
+ 
+(1 row)
 
-SET ROLE regress_file_fdw_user;
-SELECT * FROM agg_text ORDER BY a;
-  a  |    b    
------+---------
-   0 | 0.09561
-  42 |  324.78
-  56 |     7.8
- 100 |  99.097
-(4 rows)
+SELECT * from sonnet116_compressed;
+                        log_entry                        
+---------------------------------------------------------
+ Let me not to the marriage of true minds   
+ Admit impediments. Love is not love   
+ Which alters when it alteration finds,   
+ Or bends with the remover to remove:   
+ O, no! it is an ever-fixed mark, 
+ That looks on tempests and is never shaken;   
+ It is the star to every wandering bark,   
+ Whose worth’s unknown, although his height be taken.   
+ Love ’s not Time’s fool, though rosy lips and cheeks   
+ Within his bending sickle’s compass come;
+ Love alters not with his brief hours and weeks,   
+ But bears it out even to the edge of doom.   
+   If this be error, and upon me prov’d,   
+   I never writ, nor no man ever lov’d.
+(14 rows)
 
-SET ROLE regress_no_priv_user;
-SELECT * FROM agg_text ORDER BY a;   -- ERROR
-ERROR:  permission denied for foreign table agg_text
-SET ROLE regress_file_fdw_user;
-\t on
-EXPLAIN (VERBOSE, COSTS FALSE) SELECT * FROM agg_text WHERE a > 0;
- Foreign Scan on public.agg_text
-   Output: a, b
-   Filter: (agg_text.a > 0)
-   Foreign File: /workplace/kadamnn/postgresql-logfdw/data/agg.data
+SELECT log_time, message from "pglog_compressed" order by 1;
+             log_time             |                                  message                                  
+----------------------------------+---------------------------------------------------------------------------
+ Tue Aug 09 15:45:18.172 2016 PDT | ending log output to stderr
+ Tue Aug 09 15:45:18.175 2016 PDT | database system was interrupted; last known up at 2016-08-09 22:43:34 UTC
+ Tue Aug 09 15:45:18.223 2016 PDT | checkpoint record is at 0/90002E0
+ Tue Aug 09 15:45:18.223 2016 PDT | redo record is at 0/90002A8; shutdown FALSE
+ Tue Aug 09 15:45:18.223 2016 PDT | next transaction ID: 0/1879; next OID: 24578
+ Tue Aug 09 15:45:18.223 2016 PDT | next MultiXactId: 1; next MultiXactOffset: 0
+ Tue Aug 09 15:45:18.223 2016 PDT | oldest unfrozen transaction ID: 1822, in database 1
+(7 rows)
 
-\t off
--- file FDW allows foreign tables to be accessed without user mapping
-DROP USER MAPPING FOR regress_file_fdw_user SERVER file_server;
-SELECT * FROM agg_text ORDER BY a;
-  a  |    b    
------+---------
-   0 | 0.09561
-  42 |  324.78
-  56 |     7.8
- 100 |  99.097
-(4 rows)
+-- make sure badly formatted compressed files throw error
+SELECT create_foreign_table_for_log_file('badcsv_compressed', 'log_server', 'badcsvformat.csv.gz');
+ create_foreign_table_for_log_file 
+-----------------------------------
+ 
+(1 row)
 
--- privilege tests for object
-SET ROLE regress_file_fdw_superuser;
-ALTER FOREIGN TABLE agg_text OWNER TO regress_file_fdw_user;
-ALTER FOREIGN TABLE agg_text OPTIONS (SET format 'text');
-SET ROLE regress_file_fdw_user;
-ALTER FOREIGN TABLE agg_text OPTIONS (SET format 'text');
-ERROR:  only superuser or a member of the pg_read_server_files role may specify the filename option of a file_fdw foreign table
-SET ROLE regress_file_fdw_superuser;
--- cleanup
+SELECT * from badcsv_compressed; --ERROR
+ERROR:  date/time field value out of range: "56;@7.8@"
+HINT:  Perhaps you need a different "datestyle" setting.
+CONTEXT:  COPY badcsv_compressed, line 1, column log_time: "56;@7.8@"
+SELECT create_foreign_table_for_log_file('badgz_compressed', 'log_server', 'postgresql.log.bad.gzfile.gz');
+ create_foreign_table_for_log_file 
+-----------------------------------
+ 
+(1 row)
+
+SELECT * from badgz_compressed; --ERROR
+ERROR:  invalid byte sequence for encoding "UTF8": 0x00
+HINT:  This could mean that the log file or a portion of the log file was created by a version of PostgreSQL that the installed version of log_fdw cannot read. It may be possible to read the file after running the command 'ALTER EXTENSION log_fdw UPDATE' and recreating the foreign table.
+CONTEXT:  COPY badgz_compressed, line 1
+-- make sure log_fdw will generate apporiate error report when log file or a portion of the log file was created by a version of PostgreSQL that the installed version of log_fdw cannot read
+SELECT create_foreign_table_for_log_file('pglog_old', 'log_server', 'postgresql.log.old.csv');
+ create_foreign_table_for_log_file 
+-----------------------------------
+ 
+(1 row)
+
+SELECT * from pglog_old;
+ERROR:  missing data for column "backend_type"
+HINT:  This could mean that the log file or a portion of the log file was created by a version of PostgreSQL that the installed version of log_fdw cannot read. It may be possible to read the file after running the command 'ALTER EXTENSION log_fdw UPDATE' and recreating the foreign table.
+CONTEXT:  COPY pglog_old, line 1: "2016-08-09 22:45:18.172 UTC,,,9876,,57aa5cfe.2694,1,,2016-08-09 22:45:18 UTC,,0,LOG,00000,"ending lo..."
+SELECT create_foreign_table_for_log_file('pglog_mix', 'log_server', 'postgresql.log.mix.csv');
+ create_foreign_table_for_log_file 
+-----------------------------------
+ 
+(1 row)
+
+SELECT * from pglog_mix;
+ERROR:  missing data for column "leader_pid"
+HINT:  This could mean that the log file or a portion of the log file was created by a version of PostgreSQL that the installed version of log_fdw cannot read. It may be possible to read the file after running the command 'ALTER EXTENSION log_fdw UPDATE' and recreating the foreign table.
+CONTEXT:  COPY pglog_mix, line 2: "2016-08-09 22:45:18.175 UTC,,,9878,,57aa5cfe.2696,1,,2016-08-09 22:45:18 UTC,,0,LOG,00000,"database ..."
+-- non-rds_superusers can run create_foreign_table_for_log_file()
+GRANT EXECUTE ON FUNCTION create_foreign_table_for_log_file(text, text, text) TO no_priv_user;
+GRANT USAGE ON FOREIGN SERVER log_server TO no_priv_user;
+SET ROLE no_priv_user;
+SELECT create_foreign_table_for_log_file('priv_test', 'log_server', 'sonnet116.txt');
+ create_foreign_table_for_log_file 
+-----------------------------------
+ 
+(1 row)
+
 RESET ROLE;
-DROP EXTENSION file_fdw CASCADE;
-NOTICE:  drop cascades to 7 other objects
-DETAIL:  drop cascades to server file_server
-drop cascades to user mapping for regress_file_fdw_superuser on server file_server
-drop cascades to user mapping for regress_no_priv_user on server file_server
-drop cascades to foreign table agg_text
-drop cascades to foreign table agg_csv
-drop cascades to foreign table agg_bad
-drop cascades to foreign table text_csv
-DROP ROLE regress_file_fdw_superuser, regress_file_fdw_user, regress_no_priv_user;
+-- file path is checked even without validator function
+ALTER FOREIGN DATA WRAPPER log_fdw NO VALIDATOR;
+CREATE FOREIGN TABLE validator1 (a INT) SERVER log_server OPTIONS (filename '/a/b/c');
+CREATE FOREIGN TABLE validator2 (a INT) SERVER log_server OPTIONS (filename 'alsdfkjalskdjfhlsdkjhasdflkjahsdflkjhasdflkjhasdlfkjahsdlfkjhasdlkfjhasdf');
+CREATE FOREIGN TABLE validator3 (a INT) SERVER log_server OPTIONS (filename '/rdsdbdata/log/error/../../../hax.csv');
+CREATE FOREIGN TABLE validator4 (a INT) SERVER log_server OPTIONS (filename '/rdsdbdata/log/error/postgresql.log.abcdef.csv');
+CREATE FOREIGN TABLE validator5 (a INT) SERVER log_server OPTIONS (filename '/rdsdbdata/log/error');
+CREATE FOREIGN TABLE validator6 (a INT) SERVER log_server OPTIONS (filename '/rdsdbdata/log/error/');
+CREATE FOREIGN TABLE validator7 (a INT) SERVER log_server OPTIONS (filename '/rdsdbdata/log/error/../../../somefile.txt');
+SELECT * FROM validator1;
+ERROR:  The log file path specified was invalid.
+HINT:  Use list_postgres_log_files() and create_foreign_table_for_log_file(table_name text, server_name text, log_file_name text) to easily create foreign data wrappers to Postgres log files
+SELECT * FROM validator2;
+ERROR:  The log file path specified was invalid.
+HINT:  Use list_postgres_log_files() and create_foreign_table_for_log_file(table_name text, server_name text, log_file_name text) to easily create foreign data wrappers to Postgres log files
+SELECT * FROM validator3;
+ERROR:  The log file path specified was invalid.
+HINT:  Use list_postgres_log_files() and create_foreign_table_for_log_file(table_name text, server_name text, log_file_name text) to easily create foreign data wrappers to Postgres log files
+SELECT * FROM validator4;
+ERROR:  could not open file "/rdsdbdata/log/error/postgresql.log.abcdef.csv" for reading: No such file or directory
+HINT:  COPY FROM instructs the PostgreSQL server process to read a file. You may want a client-side facility such as psql's \copy.
+SELECT * FROM validator5;
+ERROR:  The log file path specified was invalid.
+HINT:  Use list_postgres_log_files() and create_foreign_table_for_log_file(table_name text, server_name text, log_file_name text) to easily create foreign data wrappers to Postgres log files
+SELECT * FROM validator6;
+ERROR:  The log file path specified was invalid.
+HINT:  Use list_postgres_log_files() and create_foreign_table_for_log_file(table_name text, server_name text, log_file_name text) to easily create foreign data wrappers to Postgres log files
+SELECT * FROM validator7;
+ERROR:  The log file path specified was invalid.
+HINT:  Use list_postgres_log_files() and create_foreign_table_for_log_file(table_name text, server_name text, log_file_name text) to easily create foreign data wrappers to Postgres log files
+-- cleanup
+DROP EXTENSION log_fdw CASCADE;
+NOTICE:  drop cascades to 25 other objects
+DETAIL:  drop cascades to server log_server
+drop cascades to user mapping for log_fdw_superuser on server log_server
+drop cascades to user mapping for no_priv_user on server log_server
+drop cascades to foreign table pglog_1
+drop cascades to foreign table pglog_2
+drop cascades to foreign table pglog_3
+drop cascades to foreign table pglog_bad
+drop cascades to foreign table my_postgres_error_log
+drop cascades to foreign table "quote me"
+drop cascades to foreign table sonnet116
+drop cascades to foreign table n
+drop cascades to foreign table sonnet116_compressed
+drop cascades to foreign table pglog_compressed
+drop cascades to foreign table badcsv_compressed
+drop cascades to foreign table badgz_compressed
+drop cascades to foreign table pglog_old
+drop cascades to foreign table pglog_mix
+drop cascades to foreign table priv_test
+drop cascades to foreign table validator1
+drop cascades to foreign table validator2
+drop cascades to foreign table validator3
+drop cascades to foreign table validator4
+drop cascades to foreign table validator5
+drop cascades to foreign table validator6
+drop cascades to foreign table validator7
+DROP ROLE log_fdw_superuser, log_fdw_user, no_priv_user;

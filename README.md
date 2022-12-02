@@ -1,14 +1,14 @@
 # Log_fdw - (A Foreign-Data Wrapper to enable reading PostgreSQL log files)
 
-This is a postgres extension which enables reading PostgreSQL log files via SQL
-In log fdw the data source options are filename, and program 
-Either filename or program option is required for log_fdw foreign tables
-SQL function list_postgres_log_files is used as Foreign-data wrapper handler function
+This is a postgres extension which enables reading PostgreSQL log files via SQL.
+In log fdw the data source options are filename, and program. 
+Either filename or program option is required for log_fdw foreign tables.
+SQL function list_postgres_log_files is used as Foreign-data wrapper handler function.
 Only superusers are allowed to set options of a log_fdw foreign table. This is because we don't want non-superusers to be able to control which file gets read or which program gets executed.
 
-
 ## Quick install instructions
-Clone the repository: https://github.com/aws/postgresql-logfdw 
+
+Clone the repository: https://github.com/aws/postgresql-logfdw
 
 ```
 git clone https://github.com/aws/postgresql-logfdw.git
@@ -19,14 +19,14 @@ make clean
 make install
 ```
 
-Go ahead and create extension:
+### Go ahead and create extension:
 
 ```
 postgres=# create extension log_fdw;
 CREATE EXTENSION
 ```
 
-To see the functions created:
+### To see the functions created:
 
 ```
 postgres=# \df
@@ -38,7 +38,7 @@ postgres=# \df
  public | log_fdw_handler                   | fdw_handler      |                                                       | func
  public | log_fdw_validator                 | void             | text[], oid                                           | func
 (4 rows)
-￼```
+```
 
 ```
 postgres=# SELECT * FROM list_postgres_log_files() LIMIT 10;
@@ -66,14 +66,14 @@ postgres=# SELECT * FROM list_postgres_log_files() ORDER BY 1 DESC LIMIT 2;
 (2 rows)
 ```
 
-Create server:
+### Create server:
 
 ```
 postgres=# CREATE SERVER pg_local FOREIGN DATA WRAPPER log_fdw;
 CREATE SERVER
 ```
 
-Create tables from csv files and log files:
+### Create tables from csv files and log files:
 
 ```
 postgres=# SELECT * FROM create_foreign_table_for_log_file('postgresql_2022_11_28_csv','pg_local','postgresql-2022-11-28.csv');
@@ -91,7 +91,7 @@ postgres=# SELECT * FROM create_foreign_table_for_log_file('postgresql_2022_11_2
 (1 row)
 ```
 
-To see tables created:
+### To see tables created:
 
 ```
 postgres=# \detr
@@ -103,14 +103,15 @@ postgres=# \detr
 (2 rows)￼
 ```
 
-Switch on expanded display:
+### Switch on expanded display:
 
 ```
 postgres=# \x
 Expanded display is on.
 ```
 
-Select query on tables created:
+### Select query on tables created:
+
 SELECT * FROM postgresql_2022_11_14_log LIMIT 2;
 
 ```
@@ -181,10 +182,8 @@ leader_pid             |
 query_id               | 0
 ```
 
-￼
+### To remove extension:
 
-
-To remove extension:
 DROP EXTENSION log_fdw CASCADE;
 
 ```
