@@ -1,0 +1,5 @@
+# log_fdw extension
+comment = 'foreign-data wrapper for Postgres log file access'
+default_version = 'EXTVERSION'
+module_pathname = '$libdir/log_fdw'
+relocatable = true
