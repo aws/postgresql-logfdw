@@ -3,8 +3,10 @@
  * log_fdw.c
  *     foreign-data wrapper for Postgres log files.
  *
- * Portions Copyright (c) 2016, Amazon Web Services
+ * Portions Copyright (c) 2022, Amazon Web Services
  * Portions Copyright (c) 2010-2016, PostgreSQL Global Development Group
+ *
+ * Modifications Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * IDENTIFICATION
  *     postgresql-log_fdw/log_fdw.c
@@ -163,7 +165,7 @@ list_postgres_log_files(PG_FUNCTION_ARGS)
     char            *values[2];
     HeapTuple       tuple;
     char            *file_path;
-    char            *full_filename;
+    char            *full_logdir;
 
     /* check to see if caller supports us returning a tuplestore */
     if (!rsinfo || !(rsinfo->allowedModes & SFRM_Materialize))
@@ -199,26 +201,26 @@ list_postgres_log_files(PG_FUNCTION_ARGS)
     tupstore = tuplestore_begin_heap(true, false, work_mem);
 
     file_path = (char *) palloc(PATH_MAX);
-    full_filename = (char *) palloc(PATH_MAX);
+    full_logdir = (char *) palloc(PATH_MAX);
 
     if (strlen(Log_directory) > 0 && Log_directory[0] == '/')
     {
-      strcpy(full_filename,Log_directory);
+        strcpy(full_logdir,Log_directory);
     } 
     else 
     {
-      snprintf(full_filename, PATH_MAX,"%s/%s",DataDir, Log_directory);
+        snprintf(full_logdir, PATH_MAX,"%s/%s",DataDir, Log_directory);
     }
 
     file_path = (char *) palloc(PATH_MAX);
-    dir = AllocateDir(full_filename);
-    while (NULL != (de = ReadDir(dir, full_filename)))
+    dir = AllocateDir(full_logdir);
+    while (NULL != (de = ReadDir(dir, full_logdir)))
     {
         struct stat st;
         int stat_err;
 
         /* get the full file path */
-        snprintf(file_path, PATH_MAX, "%s/%s", full_filename, de->d_name);
+        snprintf(file_path, PATH_MAX, "%s/%s", full_logdir, de->d_name);
 
         /* get the size in bytes of the file (note that we skip the file if something goes wrong with stat(...)) */
         stat_err = stat(file_path, &st);
@@ -234,7 +236,7 @@ list_postgres_log_files(PG_FUNCTION_ARGS)
     }
     FreeDir(dir);
     pfree(file_path);
-    pfree(full_filename);
+    pfree(full_logdir);
 
     /*
      * no longer need the tuple descriptor reference created by
@@ -345,29 +347,9 @@ log_fdw_validator(PG_FUNCTION_ARGS)
                          errmsg("conflicting or redundant options")));
 
             /*
-             * Check that the file is log_directory
-             *
-             * During pg_upgrade, we skip checking whether the file
-             * actually exists because it may have already been
-             * rotated away.  To guard against attack vectors from
-             * other utilities that use binary upgrade mode (e.g.
-             * pg_transport), we still check the file path as best
-             * we can.
+             * Check that the file does not contain / for path
              */
             real_path = pstrdup(defGetString(def));
-            /*canonicalize_path(real_path);
-
-            fail = path_contains_parent_reference(real_path);
-            fail |= !path_is_prefix_of_path(full_filename, real_path);
-            fail |= strlen(full_filename) + 1 >= strlen(real_path);
-
-            if (!IsBinaryUpgrade)
-            {
-                pfree(real_path);
-                real_path = (char *) palloc(PATH_MAX);
-                fail |= (realpath(defGetString(def), real_path) == NULL);
-            }
-            */
 
             if ( strchr(real_path, '/') !=NULL )
             {
@@ -382,11 +364,11 @@ log_fdw_validator(PG_FUNCTION_ARGS)
 
             if (strlen(Log_directory) > 0 && Log_directory[0] == '/')
             {
-              snprintf(full_filename, PATH_MAX, "%s/%s", Log_directory, real_path);
+                snprintf(full_filename, PATH_MAX, "%s/%s", Log_directory, real_path);
             } 
             else 
             {
-              snprintf(full_filename, PATH_MAX,"%s/%s/%s",DataDir, Log_directory, real_path);
+                snprintf(full_filename, PATH_MAX,"%s/%s/%s",DataDir, Log_directory, real_path);
             }
             filename = full_filename;
         }
@@ -491,27 +473,13 @@ fileGetOptions(Oid foreigntableid,
 
     if (strlen(Log_directory) > 0 && Log_directory[0] == '/')
     {
-      snprintf(full_filename, PATH_MAX,"%s/%s", Log_directory, *filename);
+        snprintf(full_filename, PATH_MAX,"%s/%s", Log_directory, *filename);
     } 
     else 
     {
-      snprintf(full_filename, PATH_MAX,"%s/%s/%s",DataDir, Log_directory, *filename);
+        snprintf(full_filename, PATH_MAX,"%s/%s/%s",DataDir, Log_directory, *filename);
     }
     *filename = full_filename;
-    /*
-    canonicalize_path(path);
-    if (path_contains_parent_reference(path) ||
-        !path_is_prefix_of_path(full_filename, path) ||
-        strlen(full_filename) + 1 >= strlen(path))
-        ereport(ERROR,
-                (errcode(ERRCODE_SYNTAX_ERROR),
-                 errmsg("2 The log file path specified was invalid."),
-                 errhint("Use list_postgres_log_files() and "
-                         "create_foreign_table_for_log_file(table_name text, "
-                         "server_name text, log_file_name text) to easily "
-                         "create foreign data wrappers to Postgres log files")));
-    pfree(path);
-    */
 
     /* determine the format based on the file name */
     if (pg_str_endswith(full_filename, CSV_FILE_EXTENSION)
