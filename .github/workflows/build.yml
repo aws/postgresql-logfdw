@@ -1,11 +1,11 @@
 name: plr CI
 on: [push, pull_request]
 jobs:
-  master:
+  head:
     runs-on: ubuntu-latest
     steps:
       - name: Echo site details
-        run: echo building master
+        run: echo building against head
 
       - name: Checkout code
         uses: actions/checkout@v2
