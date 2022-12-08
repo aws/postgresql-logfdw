@@ -1,4 +1,4 @@
-name: plr CI
+name: log_fdw CI
 on: [push, pull_request]
 jobs:
   head:
@@ -87,9 +87,5 @@ jobs:
           psql --version
           make installcheck PGUSER=postgres || (cat regression.diffs && false)
 
-      - name: After Success
-        # success() returns true, when none of the previous steps have failed or been canceled.
-        if: ${{ success() }}
-        # Uploads code coverage to codecov.io
-        run: bash <(curl -s https://codecov.io/bash)
+     
 
