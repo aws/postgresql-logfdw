@@ -13,7 +13,7 @@ trim_trailing_whitespace = false
 indent_style = space 
 indent_size = 4
 
-[*.sql]
+[*.{sql,sql.in}]
 indent_style = space
 indent_size = 2
 
