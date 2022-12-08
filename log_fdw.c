@@ -226,7 +226,8 @@ list_postgres_log_files(PG_FUNCTION_ARGS)
         stat_err = stat(file_path, &st);
         if (0 != stat_err || !S_ISREG(st.st_mode))  /* we only care about regular files */
             continue;
-        snprintf(bytes_str, NCHARS, INT64_FORMAT, st.st_size);
+		// casting to long here as macos st.st_size is a longlong. It is highly unlikely there is a file name longer than 64bits
+        snprintf(bytes_str, NCHARS, INT64_FORMAT, (long)st.st_size);
 
         /* build the row */
         values[0] = pstrdup(de->d_name);
@@ -1185,8 +1186,11 @@ file_acquire_sample_rows(Relation onerel, int elevel,
                  * Found a suitable tuple, so save it, replacing one old tuple
                  * at random
                  */
-                int            k = (int) (targrows * sampler_random_fract(rstate.randstate));
-
+#if (PG_VERSION_NUM < 150000)
+                int	k = (int) (targrows * sampler_random_fract(rstate.randstate));
+#else
+                int	k = (int) (targrows * sampler_random_fract(&rstate.randstate));
+#endif
                 Assert(k >= 0 && k < targrows);
                 heap_freetuple(rows[k]);
                 rows[k] = heap_form_tuple(tupDesc, values, nulls);

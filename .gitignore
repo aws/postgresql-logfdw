@@ -1,0 +1,6 @@
+*.so
+*.o
+log_fdw*.control
+log_fdw*.sql
+regression.*
+results/*

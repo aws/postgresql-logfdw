@@ -1,0 +1,19 @@
+# EditorConfig is awesome: https://EditorConfig.org
+
+# top-most EditorConfig file
+root = true
+
+[*]
+trim_trailing_whitespace = true
+
+[*.out]
+trim_trailing_whitespace = false
+
+[*.{c,h}]
+indent_style = space 
+indent_size = 4
+
+[*.{sql,sql.in}]
+indent_style = space
+indent_size = 2
+
