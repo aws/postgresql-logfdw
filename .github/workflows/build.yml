@@ -35,7 +35,7 @@ jobs:
           SHLIB_LINK=-lgcov PG_CPPFLAGS="-fprofile-arcs -ftest-coverage -O0" make
           sudo USE_PGXS=1 PATH=/usr/local/pgsql/bin:$PATH make install
           psql --version
-          make installcheck || (cat regression.diffs && false)
+          make check || (cat regression.diffs && false)
         env:
           USE_PGXS: 1
         
@@ -85,7 +85,7 @@ jobs:
           sudo USE_PGXS=1 make install
           /usr/lib/postgresql/$PG/bin/pg_config
           psql --version
-          make installcheck PGUSER=postgres || (cat regression.diffs && false)
+          make check PGUSER=postgres || (cat regression.diffs && false)
 
      
 
