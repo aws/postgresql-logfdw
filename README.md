@@ -1,32 +1,58 @@
-# Log_fdw - (A Foreign-Data Wrapper to enable reading PostgreSQL log files)
+# log_fdw
 
-This is a postgres extension which enables reading PostgreSQL log files via SQL.
-In log fdw the data source options are filename, and program. 
-Either filename or program option is required for log_fdw foreign tables.
-SQL function list_postgres_log_files is used as Foreign-data wrapper handler function.
-Only superusers are allowed to set options of a log_fdw foreign table. This is because we don't want non-superusers to be able to control which file gets read or which program gets executed.
+This is a PostgreSQL extension built using Foreign-Data Wrapper facility to
+enable reading log files via SQL. It basically provides SQL interface to create
+foreign tables for each PostgreSQL log file through which the file contents can
+be read and analyzed. Only superusers are allowed to create this extension.
+
+## SQL functions
+To create foreign table, use:
+```
+create_foreign_table_for_log_file(IN table_name TEXT, IN server_name TEXT, IN log_file_name TEXT)
+```
+To list files and their sizes present in PostgreSQL log directory, use:
+```
+list_postgres_log_files(OUT file_name TEXT, OUT file_size_bytes BIGINT)
+```
+Note that `list_postgres_log_files()` function is a wrapper around PostgreSQL's
+core function [pg_ls_logdir](https://www.postgresql.org/docs/current/functions-admin.html#FUNCTIONS-ADMIN-GENFILE)
+and exists for compatibility reasons.
+
+By default, use of this extension's functions is restricted to superusers.
+Access may be granted by superusers to others using GRANT as needed.
+For instance, following are the minimal things that one needs to do for
+enabling others to use the extension's functions:
+```
+CREATE ROLE foo; -- a non-superuser
+GRANT pg_monitor TO foo; -- do this only when list_postgres_log_files() is used because the underlying function pg_ls_logdir() needs it
+GRANT CREATE ON SCHEMA bar TO foo; -- to create foreign tables in schema named bar
+GRANT USAGE ON FOREIGN SERVER log_fdw_server TO foo; -- to use log_fdw foreign server
+SET ROLE foo;
+SELECT * FROM create_foreign_table_for_log_file('log_file_tbl', 'log_fdw_server', 'log_file.csv');
+```
 
 ## Quick install instructions
 
-Clone the repository: https://github.com/aws/postgresql-logfdw
+Clone the repository from https://github.com/aws/postgresql-logfdw:
 
 ```
 git clone https://github.com/aws/postgresql-logfdw.git
 ``` 
+Run `make clean` and `make install` to install the extension. Remember to set
+`PATH` environment variable to point to `pg_config`. Alternatively, copy the
+extension source code to `contrib` directory under PostgreSQL source tree and
+install it.
 
-```
-make clean
-make install
-```
+## Usage
 
-### Go ahead and create extension:
+### Create extension:
 
 ```
 postgres=# create extension log_fdw;
 CREATE EXTENSION
 ```
 
-### To see the functions created:
+### See functions created by extension:
 
 ```
 postgres=# \df
@@ -69,14 +95,14 @@ postgres=# SELECT * FROM list_postgres_log_files() ORDER BY 1 DESC LIMIT 2;
 ### Create server:
 
 ```
-postgres=# CREATE SERVER pg_local FOREIGN DATA WRAPPER log_fdw;
+postgres=# CREATE SERVER log_fdw_server FOREIGN DATA WRAPPER log_fdw;
 CREATE SERVER
 ```
 
-### Create tables from csv files and log files:
+### Create foreign tables from csv files and log files:
 
 ```
-postgres=# SELECT * FROM create_foreign_table_for_log_file('postgresql_2022_11_28_csv','pg_local','postgresql-2022-11-28.csv');
+postgres=# SELECT * FROM create_foreign_table_for_log_file('postgresql_2022_11_28_csv','log_fdw_server','postgresql-2022-11-28.csv');
  create_foreign_table_for_log_file 
 -----------------------------------
  
@@ -84,37 +110,32 @@ postgres=# SELECT * FROM create_foreign_table_for_log_file('postgresql_2022_11_2
 ```
 
 ```
-postgres=# SELECT * FROM create_foreign_table_for_log_file('postgresql_2022_11_28_log','pg_local','postgresql-2022-11-28.log');
+postgres=# SELECT * FROM create_foreign_table_for_log_file('postgresql_2022_11_28_log','log_fdw_server','postgresql-2022-11-28.log');
  create_foreign_table_for_log_file 
 -----------------------------------
  
 (1 row)
 ```
 
-### To see tables created:
+### See foreign tables created:
 
 ```
 postgres=# \detr
             List of foreign tables
  Schema |           Table           |  Server  
---------+---------------------------+----------
- public | postgresql_2022_11_28_csv | pg_local
- public | postgresql_2022_11_28_log | pg_local
+--------+---------------------------+----------------
+ public | postgresql_2022_11_28_csv | log_fdw_server
+ public | postgresql_2022_11_28_log | log_fdw_server
 (2 rows)￼
 ```
 
-### Switch on expanded display:
-
-```
-postgres=# \x
-Expanded display is on.
-```
-
-### Select query on tables created:
+### Read log file contents via foreign tables created:
 
 SELECT * FROM postgresql_2022_11_14_log LIMIT 2;
 
 ```
+postgres=# \x
+Expanded display is on.
 postgres=# select * from postgresql_2022_11_28_log limit 2;
 -[ RECORD 1 ]---------------------------------------------------------------------------------------------------------------------------
 log_entry | 2022-11-28 20:37:51.767 UTC   14170  637e8d69.375a 7  2022-11-23 21:15:21 UTC  0 00000LOG:  received fast shutdown request
@@ -182,16 +203,30 @@ leader_pid             |
 query_id               | 0
 ```
 
-### To remove extension:
+### Remove extension:
 
 DROP EXTENSION log_fdw CASCADE;
 
 ```
 postgres=# DROP EXTENSION log_fdw CASCADE;
 NOTICE:  drop cascades to 3 other objects
-DETAIL:  drop cascades to server pg_local
+DETAIL:  drop cascades to server log_fdw_server
 drop cascades to foreign table postgresql_2022_11_28_csv
 drop cascades to foreign table postgresql_2022_11_28_log
 DROP EXTENSION
 ```
 
+## Compatibility with PostgreSQL
+
+This extension currently works well with PostgreSQL version 14, 15 and 16devel.
+
+## LICENSE
+
+See [LICENSE](https://github.com/aws/postgresql-logfdw/blob/main/LICENSE) for
+detailed information.
+
+## Contributing
+
+See [CODE_OF_CONDUCT](https://github.com/aws/postgresql-logfdw/blob/main/CODE_OF_CONDUCT.md)
+and [CONTRIBUTING](https://github.com/aws/postgresql-logfdw/blob/main/CONTRIBUTING.md)
+for detailed information.

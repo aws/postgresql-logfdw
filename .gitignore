@@ -1,6 +1,6 @@
+# Generated subdirectories and files
+/log/
+/results/
+/tmp_check/
 *.so
 *.o
-log_fdw*.control
-log_fdw*.sql
-regression.*
-results/*

@@ -31,14 +31,28 @@ CREATE FOREIGN DATA WRAPPER log_fdw
   HANDLER log_fdw_handler
   VALIDATOR log_fdw_validator;
 
+/*
+ * Although pg_ls_logdir() can be used instead of this function, we maintain
+ * list_postgres_log_files() as a wrapper around that to not to break
+ * applications built around log_fdw extension.
+ */
 CREATE OR REPLACE FUNCTION list_postgres_log_files(
-	OUT file_name TEXT,
-	OUT file_size_bytes BIGINT)
-RETURNS setof record
-AS 'MODULE_PATHNAME'
-LANGUAGE C STRICT;
+    OUT file_name TEXT,
+    OUT file_size_bytes BIGINT)
+ RETURNS SETOF record
+ LANGUAGE sql
+ VOLATILE PARALLEL SAFE STRICT
+BEGIN ATOMIC
+    SELECT name AS file_name, size AS file_size_bytes FROM pg_ls_logdir();
+END;
 
-CREATE OR REPLACE FUNCTION create_foreign_table_for_log_file(table_name text, server_name text, log_file_name text)
+/*
+ * Creates foreign table for a given server log file.
+ */
+CREATE OR REPLACE FUNCTION create_foreign_table_for_log_file(
+	table_name TEXT,
+	server_name TEXT,
+	log_file_name TEXT)
 RETURNS void AS
 $BODY$
 BEGIN
@@ -89,12 +103,4 @@ REVOKE ALL ON FUNCTION log_fdw_handler() FROM PUBLIC;
 REVOKE ALL ON FUNCTION log_fdw_validator(text[], oid) FROM PUBLIC;
 REVOKE ALL ON FOREIGN DATA WRAPPER log_fdw FROM PUBLIC;
 REVOKE ALL ON FUNCTION list_postgres_log_files() FROM PUBLIC;
-REVOKE ALL ON FUNCTION create_foreign_table_for_log_file(table_name text, server_name text, log_file_name text) FROM PUBLIC;
-
-ALTER FUNCTION log_fdw_handler() OWNER TO DB_SUPERUSER;
-ALTER FUNCTION log_fdw_validator(text[], oid) OWNER TO DB_SUPERUSER;
-ALTER FOREIGN DATA WRAPPER log_fdw OWNER TO DB_SUPERUSER;
-ALTER FUNCTION list_postgres_log_files() OWNER TO DB_SUPERUSER;
-ALTER FUNCTION create_foreign_table_for_log_file(table_name text, server_name text, log_file_name text) OWNER TO DB_SUPERUSER;
-
-
+REVOKE ALL ON FUNCTION create_foreign_table_for_log_file(text, text, text) FROM PUBLIC;

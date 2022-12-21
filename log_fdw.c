@@ -37,6 +37,7 @@
 #include "optimizer/pathnode.h"
 #include "optimizer/planmain.h"
 #include "optimizer/restrictinfo.h"
+#include "postmaster/syslogger.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"
 #include "utils/sampling.h"
@@ -46,17 +47,13 @@
 
 PG_MODULE_MAGIC;
 
-/* GUC Variables */
-extern char *Log_directory;
-extern char *DataDir;
-
 /*
  * Describes the valid options for objects that use this wrapper.
  */
 struct FileFdwOption
 {
-    const char *optname;
-    Oid        optcontext;        /* Oid of catalog in which option may appear */
+	const char *optname;
+	Oid			optcontext;		/* Oid of catalog in which option may appear */
 };
 
 /*
@@ -102,7 +99,6 @@ typedef struct FileFdwExecutionState
  */
 PG_FUNCTION_INFO_V1(log_fdw_handler);
 PG_FUNCTION_INFO_V1(log_fdw_validator);
-PG_FUNCTION_INFO_V1(list_postgres_log_files);
 
 /*
  * FDW callback routines
@@ -149,119 +145,6 @@ static int file_acquire_sample_rows(Relation onerel, int elevel,
                    HeapTuple *rows, int targrows,
                    double *totalrows, double *totaldeadrows);
 
-Datum
-list_postgres_log_files(PG_FUNCTION_ARGS)
-{
-#define NCHARS    32
-    char            bytes_str[NCHARS];
-    ReturnSetInfo   *rsinfo = (ReturnSetInfo *) fcinfo->resultinfo;
-    DIR             *dir;
-    struct dirent   *de;
-    MemoryContext   per_query_ctx;
-    MemoryContext   oldcontext;
-    TupleDesc       tupdesc;
-    Tuplestorestate *tupstore;
-    AttInMetadata   *attinmeta;
-    char            *values[2];
-    HeapTuple       tuple;
-    char            *file_path;
-    char            *full_logdir;
-
-    /* check to see if caller supports us returning a tuplestore */
-    if (!rsinfo || !(rsinfo->allowedModes & SFRM_Materialize))
-        ereport(ERROR,
-                (errcode(ERRCODE_SYNTAX_ERROR),
-                 errmsg("materialize mode required, but it is not "
-                        "allowed in this context")));
-
-    per_query_ctx = rsinfo->econtext->ecxt_per_query_memory;
-    oldcontext = MemoryContextSwitchTo(per_query_ctx);
-
-    /* get the requested return tuple description */
-    tupdesc = CreateTupleDescCopy(rsinfo->expectedDesc);
-
-    /*
-     * Check to make sure we have a reasonable tuple descriptor
-     */
-    if (tupdesc->natts != 2
-        || TupleDescAttr(tupdesc, 0)->atttypid != TEXTOID
-        || TupleDescAttr(tupdesc, 1)->atttypid != INT8OID)
-        ereport(ERROR,
-                (errcode(ERRCODE_SYNTAX_ERROR),
-                 errmsg("query-specified return tuple and "
-                        "function return type are not compatible")));
-
-    /* OK to use it */
-    attinmeta = TupleDescGetAttInMetadata(tupdesc);
-
-    /* let the caller know we're sending back a tuplestore */
-    rsinfo->returnMode = SFRM_Materialize;
-
-    /* initialize our tuplestore */
-    tupstore = tuplestore_begin_heap(true, false, work_mem);
-
-    file_path = (char *) palloc(PATH_MAX);
-    full_logdir = (char *) palloc(PATH_MAX);
-
-    if (strlen(Log_directory) > 0 && Log_directory[0] == '/')
-    {
-        strcpy(full_logdir,Log_directory);
-    } 
-    else 
-    {
-        snprintf(full_logdir, PATH_MAX,"%s/%s",DataDir, Log_directory);
-    }
-
-    file_path = (char *) palloc(PATH_MAX);
-    dir = AllocateDir(full_logdir);
-    while (NULL != (de = ReadDir(dir, full_logdir)))
-    {
-        struct stat st;
-        int stat_err;
-
-        /* get the full file path */
-        snprintf(file_path, PATH_MAX, "%s/%s", full_logdir, de->d_name);
-
-        /* get the size in bytes of the file (note that we skip the file if something goes wrong with stat(...)) */
-        stat_err = stat(file_path, &st);
-        if (0 != stat_err || !S_ISREG(st.st_mode))  /* we only care about regular files */
-            continue;
-		// casting to long here as macos st.st_size is a longlong. It is highly unlikely there is a file name longer than 64bits
-        snprintf(bytes_str, NCHARS, INT64_FORMAT, (long)st.st_size);
-
-        /* build the row */
-        values[0] = pstrdup(de->d_name);
-        values[1] = pstrdup(bytes_str);
-        tuple = BuildTupleFromCStrings(attinmeta, values);
-        tuplestore_puttuple(tupstore, tuple);
-    }
-    FreeDir(dir);
-    pfree(file_path);
-    pfree(full_logdir);
-
-    /*
-     * no longer need the tuple descriptor reference created by
-     * TupleDescGetAttInMetadata()
-     */
-    ReleaseTupleDesc(tupdesc);
-
-    tuplestore_donestoring(tupstore);
-    rsinfo->setResult = tupstore;
-
-    /*
-     * SFRM_Materialize mode expects us to return a NULL Datum. The actual
-     * tuples are in our tuplestore and passed back through rsinfo->setResult.
-     * rsinfo->setDesc is set to the tuple description that we actually used
-     * to build our tuples with, so the caller can verify we did what it was
-     * expecting.
-     */
-    rsinfo->setDesc = tupdesc;
-    MemoryContextSwitchTo(oldcontext);
-
-    PG_RETURN_VOID();
-}
-
-
 /*
  * Foreign-data wrapper handler function: return a struct with pointers
  * to my callback routines.
@@ -298,9 +181,7 @@ log_fdw_validator(PG_FUNCTION_ARGS)
     Oid      catalog = PG_GETARG_OID(1);
     char     *filename = NULL;
     ListCell *cell;
-    char     *full_filename;
 
-    full_filename = (char *) palloc(PATH_MAX);
     /*
      * Check that only options supported by log_fdw, and allowed for the
      * current object type, are given.
@@ -332,52 +213,27 @@ log_fdw_validator(PG_FUNCTION_ARGS)
                      buf.len > 0
                      ? errhint("Valid options in this context are: %s",
                                buf.data)
-                  : errhint("There are no valid options in this context.")));
+                     : errhint("There are no valid options in this context.")));
         }
 
         /* Separate out filename. */
-
         if (strcmp(def->defname, "filename") == 0)
         {
-            char *real_path;
-            //bool fail = false;
-
             if (filename)
                 ereport(ERROR,
                         (errcode(ERRCODE_SYNTAX_ERROR),
                          errmsg("conflicting or redundant options")));
 
-            /*
-             * Check that the file does not contain / for path
-             */
-            real_path = pstrdup(defGetString(def));
+            filename = defGetString(def);
 
-            if ( strchr(real_path, '/') !=NULL )
-            {
+            if (is_absolute_path(filename))
                 ereport(ERROR,
                         (errcode(ERRCODE_SYNTAX_ERROR),
-                         errmsg("The log filename with path is not allowed."),
-                         errhint("Use list_postgres_log_files() and "
-                                "create_foreign_table_for_log_file(table_name text, "
-                                "server_name text, log_file_name text) to easily "
-                                "create foreign data wrappers to Postgres log files")));
-            }
-
-            if (strlen(Log_directory) > 0 && Log_directory[0] == '/')
-            {
-                snprintf(full_filename, PATH_MAX, "%s/%s", Log_directory, real_path);
-            } 
-            else 
-            {
-                snprintf(full_filename, PATH_MAX,"%s/%s/%s",DataDir, Log_directory, real_path);
-            }
-            filename = full_filename;
+                         errmsg("absolute path is not allowed as filename for log_fdw foreign tables")));
         }
     }
 
-    /*
-     * Filename option is required for log_fdw foreign tables.
-     */
+    /* Filename option is required for log_fdw foreign tables. */
     if (catalog == ForeignTableRelationId && filename == NULL)
         ereport(ERROR,
                 (errcode(ERRCODE_FDW_DYNAMIC_PARAMETER_VALUE_NEEDED),
@@ -459,30 +315,22 @@ fileGetOptions(Oid foreigntableid,
      */
     if (*filename == NULL)
         elog(ERROR, "filename is required for log_fdw foreign tables");
-    if ( strchr(*filename,'/') != NULL )
-        elog(ERROR, "filename with path is not allowed by log_fdw foreign tables");
-    else
-        ereport(NOTICE, 
-                (errcode(ERRCODE_SYNTAX_ERROR),
-                 errmsg("Filename is %s",*filename),
-                 errhint("None")));
-     /*
-     * The validator should have also checked that the file is in
-     * /rdsdbdata/log/error, but check again, just in case.
-     */
-    full_filename = (char *) palloc(PATH_MAX);
 
-    if (strlen(Log_directory) > 0 && Log_directory[0] == '/')
-    {
-        snprintf(full_filename, PATH_MAX,"%s/%s", Log_directory, *filename);
-    } 
-    else 
-    {
-        snprintf(full_filename, PATH_MAX,"%s/%s/%s",DataDir, Log_directory, *filename);
-    }
+    if (is_absolute_path(*filename))
+        ereport(ERROR,
+                (errcode(ERRCODE_SYNTAX_ERROR),
+                 errmsg("absolute path is not allowed as filename for log_fdw foreign tables")));
+
+    full_filename = (char *) palloc(MAXPGPATH);
+
+    if (strlen(Log_directory) > 0 && is_absolute_path(Log_directory))
+        snprintf(full_filename, MAXPGPATH, "%s/%s", Log_directory, *filename);
+    else
+        snprintf(full_filename, MAXPGPATH, "%s/%s/%s", DataDir, Log_directory, *filename);
+
     *filename = full_filename;
 
-    /* determine the format based on the file name */
+    /* Determine the format based on the file name. */
     if (pg_str_endswith(full_filename, CSV_FILE_EXTENSION)
         || pg_str_endswith(full_filename, CSV_GZ_FILE_EXTENSION))
         options = lappend(options, makeDefElem("format", (Node *) makeString("csv"), -1));
@@ -522,7 +370,8 @@ fileGetForeignRelSize(PlannerInfo *root,
      */
     fdw_private = (FileFdwPlanState *) palloc(sizeof(FileFdwPlanState));
     fileGetOptions(foreigntableid,
-                   &fdw_private->filename, &fdw_private->options);
+                   &fdw_private->filename,
+                   &fdw_private->options);
     baserel->fdw_private = (void *) fdw_private;
 
     /* Estimate relation size */
@@ -728,6 +577,7 @@ fileIterateForeignScan(ForeignScanState *node)
      * foreign tables.
      */
     ExecClearTuple(slot);
+
     /*
      * In Postgres version 13, we add one additional column "backend_type"
      * in csvlog file, thus we need to update log_fdw to 1.2 handle it. 
