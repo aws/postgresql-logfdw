@@ -54,31 +54,6 @@ SELECT has_function_privilege('regress_log_fdw_nsuperuser',
  t
 (1 row)
 
--- Users with pg_read_server_files predefined role have permission to use
--- create_foreign_table_for_log_file() by default.
-SELECT has_function_privilege('pg_read_server_files',
-    'create_foreign_table_for_log_file(text, text, text)', 'EXECUTE'); -- yes
- has_function_privilege 
-------------------------
- t
-(1 row)
-
-SELECT has_function_privilege('pg_read_server_files',
-    'list_postgres_log_files()', 'EXECUTE'); -- yes
- has_function_privilege 
-------------------------
- t
-(1 row)
-
--- Users with pg_monitor predefined role have permission to use
--- list_postgres_log_files() by default.
-SELECT has_function_privilege('pg_monitor',
-    'list_postgres_log_files()', 'EXECUTE'); -- yes
- has_function_privilege 
-------------------------
- t
-(1 row)
-
 -- Ensure that something gets logged to the server log file
 SELECT 1/0;
 ERROR:  division by zero
