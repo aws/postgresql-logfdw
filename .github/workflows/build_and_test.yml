@@ -1,0 +1,57 @@
+name: log_fdw CI
+on:
+  schedule:
+    # Runs at 00:00 UTC on every Sunday.
+    - cron: '0 0 * * Sun'
+  push:
+  pull_request:
+jobs:
+  build-and-test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        version: [master, REL_15_STABLE, REL_14_STABLE]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Test details
+        run: echo Build and test log_fdw on ${{ matrix.os }} with PostgreSQL ${{ matrix.version }} branch
+
+      - name: Checkout and build PostgreSQL code
+        run: |
+          sudo apt-get update -qq
+          sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys E298A3A825C0D65DFD57CBB651716619E084DAB9
+          sudo apt-get install -qq acl bison flex libssl-dev
+          rm -rf postgres
+          git clone --branch ${{ matrix.version }} https://github.com/postgres/postgres.git
+          pushd postgres
+          git branch
+          ./configure --prefix=$PWD/inst/
+          make -j4 install
+
+          # Here we just initialize the cluster and see if postgres comes up
+          # and stop. We could further run basic postgres tests with
+          # "make installcheck", but that's not the intention of this test.
+          cd inst/bin
+          ./initdb -D data
+          ./pg_ctl -D data -l logfile start
+          ./pg_ctl -D data -l logfile stop
+          cd ../..
+
+          # Create the directory for log_fdw extension checkout.
+          mkdir contrib/postgresql-logfdw
+          popd
+
+      - name: Checkout logfdw extension code
+        uses: actions/checkout@v3
+        with:
+          path: postgres/contrib/postgresql-logfdw
+
+      - name: Build and test logfdw extension
+        run: |
+          pushd postgres
+          cd contrib/postgresql-logfdw
+          make check || (cat regression.diffs && false)
+          popd
+          # Clean the directory
+          rm -rf postgres
