@@ -1,5 +1,10 @@
 name: log_fdw CI
-on: [push, pull_request]
+on:
+  schedule:
+    # Runs at 00:00 UTC on every Sunday.
+    - cron: '0 0 * * Sun'
+  push:
+  pull_request:
 jobs:
   build-and-test:
     strategy:
