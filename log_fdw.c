@@ -770,11 +770,11 @@ check_selective_binary_conversion(RelOptInfo *baserel,
 #else	
 	while ((attnum = bms_first_member(attrs_used)) >= 0)
 	{
-#endif	
+	
 	
 		/* Adjust for system attributes. */
 		attnum += FirstLowInvalidHeapAttributeNumber;
-
+#endif
 		if (attnum == 0)
 		{
 			has_wholerow = true;
