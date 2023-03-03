@@ -762,14 +762,16 @@ check_selective_binary_conversion(RelOptInfo *baserel,
 	tupleDesc = RelationGetDescr(rel);
 
 #if (PG_VERSION_NUM >= 160000)
-	int attidx = -1;
+	attidx = -1;
 	while ((attidx = bms_next_member(attrs_used, attidx)) >= 0)
+	{
 		/* attidx is zero-based, attnum is the normal attribute number */
 		AttrNumber	attnum = attidx + FirstLowInvalidHeapAttributeNumber;
 #else	
 	while ((attnum = bms_first_member(attrs_used)) >= 0)
-#endif	
 	{
+#endif	
+	
 		/* Adjust for system attributes. */
 		attnum += FirstLowInvalidHeapAttributeNumber;
 
