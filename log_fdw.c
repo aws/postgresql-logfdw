@@ -422,6 +422,9 @@ fileGetForeignPaths(PlannerInfo *root,
 									 NIL,	/* no pathkeys */
 									 baserel->lateral_relids,
 									 NULL,	/* no extra plan */
+#if (PG_VERSION_NUM >= 170000)
+									 NIL, /* no fdw_restrictinfo list */
+#endif
 									 coptions));
 
 	/*
