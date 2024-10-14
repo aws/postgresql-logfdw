@@ -417,6 +417,9 @@ fileGetForeignPaths(PlannerInfo *root,
 			 create_foreignscan_path(root, baserel,
 									 NULL,	/* default pathtarget */
 									 baserel->rows,
+#if (PG_VERSION_NUM >= 180000)
+									 0,
+#endif									 
 									 startup_cost,
 									 total_cost,
 									 NIL,	/* no pathkeys */
