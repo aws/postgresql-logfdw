@@ -12,6 +12,7 @@ jobs:
         os: [ubuntu-latest]
         version: [master, REL_17_STABLE, REL_16_STABLE, REL_15_STABLE, REL_14_STABLE]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
 
     steps:
       - name: Test details
