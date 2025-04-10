@@ -38,10 +38,20 @@ Clone the repository from https://github.com/aws/postgresql-logfdw:
 ```
 git clone https://github.com/aws/postgresql-logfdw.git
 ``` 
-Run `make clean` and `make install` to install the extension. Remember to set
-`PATH` environment variable to point to `pg_config`. Alternatively, copy the
-extension source code to `contrib` directory under PostgreSQL source tree and
-install it.
+
+The extension can be installed in two different ways. As a stand alone project,
+first set the `PATH` environment variable to point to `pg_config`. Then run the
+following in the postgresql-logfdw directory:
+
+```
+export USE_PGXS=1
+make
+make install
+```
+
+Alternatively, if the extension needs to be part of a larger PostgreSQL 
+distrubution, the extension source code can be copied to the `contrib` directory
+under PostgreSQL source tree and installed from there.
 
 ## Usage
 
