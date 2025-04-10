@@ -67,13 +67,14 @@ CREATE EXTENSION
 ```
 postgres=# \df
                                                       List of functions
- Schema |               Name                | Result data type |                  Argument data types                  | Type 
---------+-----------------------------------+------------------+-------------------------------------------------------+------
- public | create_foreign_table_for_log_file | void             | table_name text, server_name text, log_file_name text | func
- public | list_postgres_log_files           | SETOF record     | OUT file_name text, OUT file_size_bytes bigint        | func
- public | log_fdw_handler                   | fdw_handler      |                                                       | func
- public | log_fdw_validator                 | void             | text[], oid                                           | func
-(4 rows)
+ Schema |               Name                | Result data type |                             Argument data types                              | Type 
+--------+-----------------------------------+------------------+------------------------------------------------------------------------------+------
+ public | create_foreign_table_for_log_file | void             | table_name text, server_name text, log_file_name text                        | func
+ public | create_foreign_table_for_log_file | void             | table_name text, server_name text, log_file_name text, if_not_exists boolean | func
+ public | list_postgres_log_files           | SETOF record     | OUT file_name text, OUT file_size_bytes bigint                               | func
+ public | log_fdw_handler                   | fdw_handler      |                                                                              | func
+ public | log_fdw_validator                 | void             | text[], oid                                                                  | func
+(5 rows)
 ```
 
 ```
