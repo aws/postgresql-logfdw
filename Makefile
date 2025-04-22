@@ -3,7 +3,7 @@
 MODULES = log_fdw
 
 EXTENSION = log_fdw
-DATA = log_fdw--1.4.sql
+DATA = log_fdw--1.4.sql log_fdw--1.4--1.5.sql
 PGFILEDESC = "log_fdw - foreign data wrapper for Postgres log files"
 
 REGRESS = log_fdw
