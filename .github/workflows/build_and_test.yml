@@ -1,8 +1,8 @@
 name: log_fdw CI
 on:
-  schedule:
-    # Runs at 00:00 UTC on every Sunday.
-    - cron: '0 0 * * Sun'
+  #schedule:
+  # # Runs at 00:00 UTC on every Sunday.
+  #  - cron: '0 0 * * Sun'
   push:
   pull_request:
 jobs:
@@ -22,7 +22,7 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys E298A3A825C0D65DFD57CBB651716619E084DAB9
-          sudo apt-get install -qq acl bison flex libssl-dev
+          sudo apt-get install -qq acl bison flex libssl-dev libreadline-dev
           rm -rf postgres
           git clone --branch ${{ matrix.version }} https://github.com/postgres/postgres.git
           pushd postgres
