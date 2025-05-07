@@ -25,7 +25,12 @@
 #include "catalog/pg_foreign_table.h"
 #include "commands/copy.h"
 #include "commands/defrem.h"
+#if (PG_VERSION_NUM >= 180000)
+#include "commands/explain_state.h"
+#include "commands/explain_format.h"
+#else
 #include "commands/explain.h"
+#endif
 #include "commands/vacuum.h"
 #include "common/string.h"
 #include "foreign/fdwapi.h"
@@ -1013,7 +1018,11 @@ file_acquire_sample_rows(Relation onerel, int elevel,
 	for (;;)
 	{
 		/* Check for user-requested abort or sleep */
+#if (PG_VERSION_NUM >= 180000)
+		vacuum_delay_point(true);
+#else
 		vacuum_delay_point();
+#endif
 
 		/* Fetch next row */
 		MemoryContextReset(tupcontext);
