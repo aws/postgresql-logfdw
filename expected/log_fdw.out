@@ -12,6 +12,40 @@ HINT:  Valid options in this context are: filename
 -- Invalid option value i.e. absolute path as value
 CREATE FOREIGN TABLE log_fdw_ftbl_err () SERVER log_fdw_server OPTIONS (filename '/foo/bar');  -- ERROR
 ERROR:  absolute path is not allowed as filename for log_fdw foreign tables
+HINT:  Use list_postgres_log_files() to see the available file names.
+-- Path traversal attempts must be rejected
+CREATE FOREIGN TABLE log_fdw_ftbl_err () SERVER log_fdw_server OPTIONS (filename '../pg_hba.conf');  -- ERROR
+ERROR:  filename for log_fdw foreign tables must be a plain file name inside log_directory
+DETAIL:  Directory separators are not allowed.
+HINT:  Use list_postgres_log_files() to see the available file names.
+CREATE FOREIGN TABLE log_fdw_ftbl_err () SERVER log_fdw_server OPTIONS (filename '../../../../etc/passwd');  -- ERROR
+ERROR:  filename for log_fdw foreign tables must be a plain file name inside log_directory
+DETAIL:  Directory separators are not allowed.
+HINT:  Use list_postgres_log_files() to see the available file names.
+CREATE FOREIGN TABLE log_fdw_ftbl_err () SERVER log_fdw_server OPTIONS (filename 'foo/../../bar.log');  -- ERROR
+ERROR:  filename for log_fdw foreign tables must be a plain file name inside log_directory
+DETAIL:  Directory separators are not allowed.
+HINT:  Use list_postgres_log_files() to see the available file names.
+CREATE FOREIGN TABLE log_fdw_ftbl_err () SERVER log_fdw_server OPTIONS (filename 'subdir/foo.log');  -- ERROR
+ERROR:  filename for log_fdw foreign tables must be a plain file name inside log_directory
+DETAIL:  Directory separators are not allowed.
+HINT:  Use list_postgres_log_files() to see the available file names.
+CREATE FOREIGN TABLE log_fdw_ftbl_err () SERVER log_fdw_server OPTIONS (filename '');  -- ERROR
+ERROR:  filename for log_fdw foreign tables must not be empty
+CREATE FOREIGN TABLE log_fdw_ftbl_err () SERVER log_fdw_server OPTIONS (filename '.');  -- ERROR
+ERROR:  filename "." is not allowed for log_fdw foreign tables
+CREATE FOREIGN TABLE log_fdw_ftbl_err () SERVER log_fdw_server OPTIONS (filename '..');  -- ERROR
+ERROR:  filename ".." is not allowed for log_fdw foreign tables
+-- A value that lexically reduces to a plain file name must still be rejected:
+-- it is opened verbatim, so it escapes log_directory if "sub" is a symlink.
+CREATE FOREIGN TABLE log_fdw_ftbl_err () SERVER log_fdw_server OPTIONS (filename 'sub/../postgresql.log');  -- ERROR
+ERROR:  filename for log_fdw foreign tables must be a plain file name inside log_directory
+DETAIL:  Directory separators are not allowed.
+HINT:  Use list_postgres_log_files() to see the available file names.
+CREATE FOREIGN TABLE log_fdw_ftbl_err () SERVER log_fdw_server OPTIONS (filename './postgresql.log');  -- ERROR
+ERROR:  filename for log_fdw foreign tables must be a plain file name inside log_directory
+DETAIL:  Directory separators are not allowed.
+HINT:  Use list_postgres_log_files() to see the available file names.
 -- Option provided more than once
 CREATE FOREIGN TABLE log_fdw_ftbl_err () SERVER log_fdw_server OPTIONS (filename 'foo', filename 'bar');  -- ERROR
 ERROR:  option "filename" provided more than once
@@ -29,6 +63,13 @@ SELECT has_function_privilege('regress_log_fdw_nsuperuser',
 (1 row)
 
 SELECT has_function_privilege('regress_log_fdw_nsuperuser',
+    'create_foreign_table_for_log_file(text, text, text, bool)', 'EXECUTE'); -- no
+ has_function_privilege 
+------------------------
+ f
+(1 row)
+
+SELECT has_function_privilege('regress_log_fdw_nsuperuser',
     'list_postgres_log_files()', 'EXECUTE'); -- no
  has_function_privilege 
 ------------------------
@@ -38,10 +79,19 @@ SELECT has_function_privilege('regress_log_fdw_nsuperuser',
 -- A non-superuser can be granted permission to use log_fdw
 GRANT EXECUTE ON FUNCTION create_foreign_table_for_log_file(text, text, text)
     TO regress_log_fdw_nsuperuser;
+GRANT EXECUTE ON FUNCTION create_foreign_table_for_log_file(text, text, text, bool)
+    TO regress_log_fdw_nsuperuser;
 GRANT EXECUTE ON FUNCTION list_postgres_log_files()
     TO regress_log_fdw_nsuperuser;
 SELECT has_function_privilege('regress_log_fdw_nsuperuser',
     'create_foreign_table_for_log_file(text, text, text)', 'EXECUTE'); -- yes
+ has_function_privilege 
+------------------------
+ t
+(1 row)
+
+SELECT has_function_privilege('regress_log_fdw_nsuperuser',
+    'create_foreign_table_for_log_file(text, text, text, bool)', 'EXECUTE'); -- yes
  has_function_privilege 
 ------------------------
  t

@@ -2,5 +2,8 @@
 /log/
 /results/
 /tmp_check/
+/build/
+/regression.diffs
+/regression.out
 *.so
 *.o

@@ -1,0 +1,2 @@
+option('pg_config', type: 'string', value: 'pg_config',
+  description: 'pg_config program of the PostgreSQL installation to build against')

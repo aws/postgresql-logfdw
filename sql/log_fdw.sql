@@ -14,6 +14,20 @@ CREATE FOREIGN TABLE log_fdw_ftbl_err () SERVER log_fdw_server OPTIONS (foo 'bar
 -- Invalid option value i.e. absolute path as value
 CREATE FOREIGN TABLE log_fdw_ftbl_err () SERVER log_fdw_server OPTIONS (filename '/foo/bar');  -- ERROR
 
+-- Path traversal attempts must be rejected
+CREATE FOREIGN TABLE log_fdw_ftbl_err () SERVER log_fdw_server OPTIONS (filename '../pg_hba.conf');  -- ERROR
+CREATE FOREIGN TABLE log_fdw_ftbl_err () SERVER log_fdw_server OPTIONS (filename '../../../../etc/passwd');  -- ERROR
+CREATE FOREIGN TABLE log_fdw_ftbl_err () SERVER log_fdw_server OPTIONS (filename 'foo/../../bar.log');  -- ERROR
+CREATE FOREIGN TABLE log_fdw_ftbl_err () SERVER log_fdw_server OPTIONS (filename 'subdir/foo.log');  -- ERROR
+CREATE FOREIGN TABLE log_fdw_ftbl_err () SERVER log_fdw_server OPTIONS (filename '');  -- ERROR
+CREATE FOREIGN TABLE log_fdw_ftbl_err () SERVER log_fdw_server OPTIONS (filename '.');  -- ERROR
+CREATE FOREIGN TABLE log_fdw_ftbl_err () SERVER log_fdw_server OPTIONS (filename '..');  -- ERROR
+
+-- A value that lexically reduces to a plain file name must still be rejected:
+-- it is opened verbatim, so it escapes log_directory if "sub" is a symlink.
+CREATE FOREIGN TABLE log_fdw_ftbl_err () SERVER log_fdw_server OPTIONS (filename 'sub/../postgresql.log');  -- ERROR
+CREATE FOREIGN TABLE log_fdw_ftbl_err () SERVER log_fdw_server OPTIONS (filename './postgresql.log');  -- ERROR
+
 -- Option provided more than once
 CREATE FOREIGN TABLE log_fdw_ftbl_err () SERVER log_fdw_server OPTIONS (filename 'foo', filename 'bar');  -- ERROR
 
@@ -28,10 +42,16 @@ SELECT has_function_privilege('regress_log_fdw_nsuperuser',
     'create_foreign_table_for_log_file(text, text, text)', 'EXECUTE'); -- no
 
 SELECT has_function_privilege('regress_log_fdw_nsuperuser',
+    'create_foreign_table_for_log_file(text, text, text, bool)', 'EXECUTE'); -- no
+
+SELECT has_function_privilege('regress_log_fdw_nsuperuser',
     'list_postgres_log_files()', 'EXECUTE'); -- no
 
 -- A non-superuser can be granted permission to use log_fdw
 GRANT EXECUTE ON FUNCTION create_foreign_table_for_log_file(text, text, text)
+    TO regress_log_fdw_nsuperuser;
+
+GRANT EXECUTE ON FUNCTION create_foreign_table_for_log_file(text, text, text, bool)
     TO regress_log_fdw_nsuperuser;
 
 GRANT EXECUTE ON FUNCTION list_postgres_log_files()
@@ -39,6 +59,9 @@ GRANT EXECUTE ON FUNCTION list_postgres_log_files()
 
 SELECT has_function_privilege('regress_log_fdw_nsuperuser',
     'create_foreign_table_for_log_file(text, text, text)', 'EXECUTE'); -- yes
+
+SELECT has_function_privilege('regress_log_fdw_nsuperuser',
+    'create_foreign_table_for_log_file(text, text, text, bool)', 'EXECUTE'); -- yes
 
 SELECT has_function_privilege('regress_log_fdw_nsuperuser',
     'list_postgres_log_files()', 'EXECUTE'); -- yes

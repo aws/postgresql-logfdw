@@ -70,3 +70,5 @@ CREATE OR REPLACE FUNCTION create_foreign_table_for_log_file(
 BEGIN ATOMIC
 	SELECT create_foreign_table_for_log_file(table_name, server_name, log_file_name, false);
 END;
+
+REVOKE ALL ON FUNCTION create_foreign_table_for_log_file(text, text, text, bool) FROM PUBLIC;

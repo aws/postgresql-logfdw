@@ -1,0 +1,39 @@
+name: log_fdw out-of-tree build
+on:
+  push:
+  pull_request:
+jobs:
+  pgxs-and-meson:
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        version: [18, 14]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install packaged PostgreSQL ${{ matrix.version }}
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -qq postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -qq postgresql-${{ matrix.version }} \
+            postgresql-server-dev-${{ matrix.version }} meson ninja-build
+          echo "/usr/lib/postgresql/${{ matrix.version }}/bin" >> "$GITHUB_PATH"
+
+      # The regression test starts its own instance, so the user running
+      # it must not be root; only the install steps need sudo.
+      - name: Build, install and test with PGXS
+        run: |
+          make USE_PGXS=1
+          sudo --preserve-env=PATH make USE_PGXS=1 install
+          make USE_PGXS=1 standalone-check || (cat regression.diffs && false)
+
+      - name: Build, install and test with meson
+        run: |
+          meson setup build
+          ninja -C build
+          sudo --preserve-env=PATH ninja -C build install
+          meson test -C build --print-errorlogs
